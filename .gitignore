@@ -30,3 +30,20 @@
 *.exe
 *.out
 *.app
+
+# Desktop
+desktop/build/
+desktop/SDL/
+
+# ESP-IDF
+esp32/build/
+esp32/sdkconfig
+esp32/sdkconfig.old
+esp32/managed_components/
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/

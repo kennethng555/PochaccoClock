@@ -1,0 +1,15 @@
+cmake_minimum_required(VERSION 3.20)
+
+include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+
+project(pochacco_clock)
+
+idf_component_register(
+    SRCS
+        "main.cpp"
+        "../../shared/Clock.cpp"
+
+    INCLUDE_DIRS
+        "."
+        "../../shared"
+)
