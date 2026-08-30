@@ -34,6 +34,8 @@
 # Desktop
 desktop/build/
 desktop/SDL/
+desktop/SDL_image/
+desktop/SDL_ttf/
 
 # ESP-IDF
 esp32/build/
