@@ -491,20 +491,20 @@ void DigitalClockRenderer::drawDate(
     date.tm_mon  = time.month - 1;
     date.tm_mday = time.day;
 
+    // Calculate weekday and normalize the tm structure
+    std::mktime(&date);
+
     char buffer[64];
 
     std::strftime(
         buffer,
         sizeof(buffer),
-        "%A, %B %d",
+        "%a %b %d",
         &date
     );
 
     // --------------------------------------------------------
     // Calculate the fixed-width time area.
-    //
-    // The date will start at the exact same X position
-    // as the first digit of the time.
     // --------------------------------------------------------
 
     constexpr int DIGIT_COUNT = 6;

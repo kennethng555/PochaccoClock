@@ -55,6 +55,10 @@ add_executable(PochaccoClock
     src/DigitalClockRenderer.cpp
     src/ClockManager.cpp
     src/SDL3Display.cpp
+    music/SpectrumAnalyzer.cpp
+    music/MusicRenderer.cpp
+    music/MusicManager.cpp
+    music/MusicPlayer.cpp
 
     ../shared/Clock.cpp
 )

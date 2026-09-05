@@ -11,6 +11,13 @@
 #include "ClockManager.hpp"
 #include "ClockTime.hpp"
 #include "TimeOfDay.hpp"
+#include "../music/MusicManager.hpp"
+
+enum class AppMode
+{
+    Clock,
+    Music
+};
 
 // ============================================================
 // Logical resolution
@@ -34,6 +41,14 @@ constexpr float POCHACCO_HEIGHT =
 // ============================================================
 // Permanent scene layout
 // ============================================================
+
+// Music spectrum analyzer: top-left.
+constexpr SDL_FRect MUSIC_BOUNDS = {
+    35.0f,
+    30.0f,
+    530.0f,
+    350.0f
+};
 
 // Digital clock: center-left.
 constexpr SDL_FRect CLOCK_BOUNDS = {
@@ -305,6 +320,22 @@ int main(int argc, char* argv[])
     // ========================================================
 
     {
+
+        // ========================================================
+        // Music manager
+        // ========================================================
+        MusicManager musicManager;
+
+        if (!musicManager.initialize(renderer))
+        {
+            SDL_Log("Failed to initialize MusicManager");
+            return 1;
+        }
+
+        // ========================================================
+        // Clock manager
+        // ========================================================
+        
         ClockManager clockManager(
             renderer,
             FONT_PATH
@@ -331,6 +362,8 @@ int main(int argc, char* argv[])
         // ====================================================
         // Application state
         // ====================================================
+
+        AppMode currentMode = AppMode::Clock;
 
         bool running = true;
 
@@ -375,6 +408,9 @@ int main(int argc, char* argv[])
             // Events
             // ------------------------------------------------
 
+            bool touchActive = false;
+            float touchStartX = 0.0f;
+            float touchStartY = 0.0f;
             SDL_Event event;
 
             while (SDL_PollEvent(&event)) {
@@ -386,8 +422,109 @@ int main(int argc, char* argv[])
                         running = false;
                         break;
 
-                    default:
+                    case SDL_EVENT_KEY_DOWN:
+                    {
+                        if (event.key.key == SDLK_M)
+                        {
+                            currentMode = AppMode::Music;
+                        }
+                        else if (event.key.key == SDLK_C)
+                        {
+                            currentMode = AppMode::Clock;
+                        }
+                        else if (currentMode == AppMode::Music &&
+                                event.key.key == SDLK_SPACE)
+                        {
+                            // Temporary playback toggle.
+                            musicManager.togglePlayPause();
+                        }
+
                         break;
+                    }
+
+                    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+                    {
+                        if (currentMode == AppMode::Music)
+                        {
+                            musicManager.handleMouseClick(
+                                event.button.x,
+                                event.button.y,
+                                MUSIC_BOUNDS);
+                        }
+
+                        break;
+                    }
+
+                    case SDL_EVENT_FINGER_DOWN:
+                    {
+                        touchActive = true;
+
+                        touchStartX =
+                            event.tfinger.x *
+                            static_cast<float>(LOGICAL_WIDTH);
+
+                        touchStartY =
+                            event.tfinger.y *
+                            static_cast<float>(LOGICAL_HEIGHT);
+
+                        break;
+                    }
+
+                    case SDL_EVENT_FINGER_UP:
+                    {
+                        if (!touchActive)
+                            break;
+
+                        touchActive = false;
+
+                        const float touchEndX =
+                            event.tfinger.x *
+                            static_cast<float>(LOGICAL_WIDTH);
+
+                        const float touchEndY =
+                            event.tfinger.y *
+                            static_cast<float>(LOGICAL_HEIGHT);
+
+                        const float deltaX =
+                            touchEndX - touchStartX;
+
+                        const float deltaY =
+                            touchEndY - touchStartY;
+
+                        /*
+                        * Only treat a mostly-horizontal movement as
+                        * a mode-changing swipe.
+                        */
+                        if (std::abs(deltaX) > 100.0f &&
+                            std::abs(deltaX) > std::abs(deltaY) * 1.5f)
+                        {
+                            if (deltaX < 0.0f)
+                            {
+                                // Swipe left
+                                currentMode = AppMode::Music;
+                            }
+                            else
+                            {
+                                // Swipe right
+                                currentMode = AppMode::Clock;
+                            }
+
+                            break;
+                        }
+
+                        /*
+                        * Otherwise this was a tap.
+                        */
+                        if (currentMode == AppMode::Music)
+                        {
+                            musicManager.handleTouch(
+                                touchEndX,
+                                touchEndY,
+                                MUSIC_BOUNDS);
+                        }
+
+                        break;
+                    }
                 }
             }
 
@@ -395,9 +532,16 @@ int main(int argc, char* argv[])
             // Update
             // ------------------------------------------------
 
-            clockManager.update(
-                deltaTime
-            );
+            switch (currentMode)
+            {
+                case AppMode::Clock:
+                    clockManager.update(deltaTime);
+                    break;
+
+                case AppMode::Music:
+                    musicManager.update();
+                    break;
+            }
 
             pochaccoAnimationTime +=
                 deltaTime;
@@ -573,15 +717,31 @@ int main(int argc, char* argv[])
                 &pochaccoBounds
             );
 
+            
             // =================================================
-            // Digital clock
+            // Render current mode
             // =================================================
-
-            clockManager.render(
-                currentTime,
-                CLOCK_BOUNDS,
-                timeOfDay
-            );
+            switch (currentMode)
+            {
+                // =================================================
+                // Digital clock
+                // =================================================
+                case AppMode::Clock:
+                    clockManager.render(
+                        currentTime,
+                        CLOCK_BOUNDS,
+                        timeOfDay);
+                    break;
+                
+                // =================================================
+                // Spectrum analyzer
+                // =================================================
+                case AppMode::Music:
+                    musicManager.render(
+                        renderer,
+                        MUSIC_BOUNDS);
+                    break;
+            }
 
             // =================================================
             // Present

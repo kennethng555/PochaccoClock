@@ -1,0 +1,39 @@
+#pragma once
+
+#include <SDL3/SDL.h>
+
+#include "MusicRenderer.hpp"
+
+class MusicManager
+{
+public:
+    MusicManager() = default;
+    ~MusicManager() = default;
+
+    bool initialize(SDL_Renderer* renderer);
+
+    void update();
+
+    void render(
+        SDL_Renderer* renderer,
+        const SDL_FRect& bounds);
+
+    void handleTouch(
+        float x,
+        float y,
+        const SDL_FRect& bounds);
+
+    void handleMouseClick(
+        float x,
+        float y,
+        const SDL_FRect& bounds);
+
+    void togglePlayPause();
+
+    bool isInitialized() const;
+
+private:
+    MusicRenderer renderer;
+
+    bool initialized = false;
+};
