@@ -95,57 +95,128 @@ void SpectrumAnalyzer::calculateSpectrum()
 
 void SpectrumAnalyzer::calculateBands()
 {
-    /*
-     * Divide the frequency spectrum into 16 bands.
-     *
-     * Low frequencies -> left
-     * High frequencies -> right
-     */
-
     constexpr size_t NUM_BINS =
         FFT_SIZE / 2;
 
-    for (size_t bar = 0; bar < NUM_BARS; ++bar)
-    {
-        const size_t startBin =
-            (bar * NUM_BINS) / NUM_BARS;
+    /*
+     * Human hearing is approximately logarithmic,
+     * so use logarithmically spaced frequency bands
+     * instead of evenly spaced FFT bins.
+     *
+     * This gives the visualizer much better balance
+     * between bass, mids, and treble.
+     */
 
-        const size_t endBin =
-            ((bar + 1) * NUM_BINS) / NUM_BARS;
+    constexpr float SAMPLE_RATE = 44100.0f;
+
+    constexpr float MIN_FREQUENCY = 40.0f;
+    constexpr float MAX_FREQUENCY = 16000.0f;
+
+    for (size_t bar = 0;
+         bar < NUM_BARS;
+         ++bar)
+    {
+        /*
+         * Logarithmic frequency boundaries.
+         */
+
+        const float startRatio =
+            static_cast<float>(bar) /
+            static_cast<float>(NUM_BARS);
+
+        const float endRatio =
+            static_cast<float>(bar + 1) /
+            static_cast<float>(NUM_BARS);
+
+        const float startFrequency =
+            MIN_FREQUENCY *
+            std::pow(
+                MAX_FREQUENCY / MIN_FREQUENCY,
+                startRatio);
+
+        const float endFrequency =
+            MIN_FREQUENCY *
+            std::pow(
+                MAX_FREQUENCY / MIN_FREQUENCY,
+                endRatio);
+
+        /*
+         * Convert frequencies into FFT bins.
+         */
+
+        size_t startBin =
+            static_cast<size_t>(
+                startFrequency *
+                FFT_SIZE /
+                SAMPLE_RATE);
+
+        size_t endBin =
+            static_cast<size_t>(
+                endFrequency *
+                FFT_SIZE /
+                SAMPLE_RATE);
+
+        /*
+         * Clamp to valid FFT range.
+         */
+
+        startBin =
+            std::clamp(
+                startBin,
+                size_t(0),
+                NUM_BINS - 1);
+
+        endBin =
+            std::clamp(
+                endBin,
+                startBin + 1,
+                NUM_BINS);
+
+        /*
+         * Average the magnitude in this band.
+         */
 
         float sum = 0.0f;
-        size_t count = 0;
+        size_t binCount = 0;
 
         for (size_t bin = startBin;
              bin < endBin;
              ++bin)
         {
             sum += spectrum[bin];
-            ++count;
+            ++binCount;
         }
 
-        if (count > 0)
+        float magnitude = 0.0f;
+
+        if (binCount > 0)
         {
-            targetMagnitudes[bar] =
+            magnitude =
                 sum /
-                static_cast<float>(count);
-        }
-        else
-        {
-            targetMagnitudes[bar] = 0.0f;
+                static_cast<float>(binCount);
         }
 
         /*
-         * Increase the visual scale.
+         * Convert the raw FFT magnitude into a
+         * more useful visual range.
          *
-         * The raw DFT magnitude is very small, so this
-         * makes the bars visible.
+         * Higher frequencies naturally have less
+         * energy, so apply a small compensation.
          */
-        targetMagnitudes[bar] *= 20.0f;
+
+        const float frequencyBoost =
+            1.0f +
+            static_cast<float>(bar) /
+            static_cast<float>(NUM_BARS) *
+            0.8f;
+
+        magnitude *=
+            20.0f *
+            frequencyBoost;
 
         targetMagnitudes[bar] =
             std::clamp(
-                targetMagnitudes[bar],
+                magnitude,
                 0.0f,
                 1.0f);
     }
@@ -196,7 +267,7 @@ void SpectrumAnalyzer::render(
     if (renderer == nullptr)
         return;
 
-    constexpr float BAR_GAP = 6.0f;
+    constexpr float BAR_GAP = 3.0f;
 
     const float barWidth =
         (bounds.w -

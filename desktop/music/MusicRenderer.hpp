@@ -61,8 +61,7 @@ private:
     void renderPlayButton(
         SDL_Renderer* renderer,
         float centerX,
-        float centerY,
-        float radius);
+        float centerY);
 
     void renderPreviousButton(
         SDL_Renderer* renderer,
@@ -140,16 +139,6 @@ private:
     float animationTime = 0.0f;
 
     // ========================================================
-    // Song information
-    // ========================================================
-
-    std::string songTitle =
-        "Pochacco Dreams";
-
-    std::string artistName =
-        "Pochacco";
-
-    // ========================================================
     // Spectrum
     // ========================================================
 
@@ -160,11 +149,17 @@ private:
     // ========================================================
 
     SDL_Color titleColor{
-        0, 0, 0, 255
+        70,
+        100,
+        70,
+        255
     };
 
     SDL_Color artistColor{
-        0, 0, 0, 255
+        110,
+        140,
+        110,
+        255
     };
 
     SDL_Color primaryColor{
@@ -189,10 +184,16 @@ private:
     };
 
     SDL_Color timeColor{
-        0, 0, 0, 255
+        100,
+        125,
+        100,
+        255
     };
 
     SDL_Color iconColor{
-        0, 0, 0, 255
+        255,
+        255,
+        255,
+        255
     };
 };

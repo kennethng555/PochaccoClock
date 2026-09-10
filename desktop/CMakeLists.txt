@@ -51,10 +51,12 @@ add_subdirectory(
 add_executable(PochaccoClock
 
     src/main.cpp
-    src/AnalogClockRenderer.cpp
-    src/DigitalClockRenderer.cpp
-    src/ClockManager.cpp
+    clock/AnalogClockRenderer.cpp
+    clock/DigitalClockRenderer.cpp
+    clock/ClockManager.cpp
     src/SDL3Display.cpp
+    animation/AnimatedImage.cpp
+    animation/AnimationManager.cpp
     music/SpectrumAnalyzer.cpp
     music/MusicRenderer.cpp
     music/MusicManager.cpp

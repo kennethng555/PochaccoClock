@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <filesystem>
 
 MusicPlayer::~MusicPlayer()
 {
@@ -10,12 +11,6 @@ MusicPlayer::~MusicPlayer()
 
 bool MusicPlayer::initialize()
 {
-    /*
-     * SDL3 audio is initialized through SDL_INIT_AUDIO.
-     *
-     * main.cpp already initializes SDL through SDL3Display,
-     * but explicitly ensure the audio subsystem exists.
-     */
     if (!SDL_WasInit(SDL_INIT_AUDIO))
     {
         if (!SDL_InitSubSystem(SDL_INIT_AUDIO))
@@ -37,13 +32,17 @@ bool MusicPlayer::load(
     if (path == nullptr)
         return false;
 
-    /*
-     * Stop anything currently playing.
-     */
     stop();
+
+    filename = std::filesystem::path(path).stem().string();
 
     audioData.clear();
     monoSamples.clear();
+
+    title.clear();
+    artist.clear();
+    album.clear();
+    genre.clear();
 
     SDL_AudioSpec spec{};
 
@@ -64,9 +63,6 @@ bool MusicPlayer::load(
         return false;
     }
 
-    /*
-     * Copy the WAV data into our own storage.
-     */
     audioData.resize(loadedLength);
 
     std::memcpy(
@@ -78,16 +74,18 @@ bool MusicPlayer::load(
 
     sourceSpec = spec;
 
+    /*
+     * Read WAV metadata before processing the
+     * audio samples.
+     */
+    parseWavMetadata(audioData);
+
     sampleRate =
         static_cast<size_t>(sourceSpec.freq);
 
     channelCount =
         static_cast<size_t>(sourceSpec.channels);
 
-    /*
-     * Convert the source to mono floating-point samples
-     * for the spectrum analyzer.
-     */
     convertToMono(
         audioData,
         sourceSpec);
@@ -98,6 +96,22 @@ bool MusicPlayer::load(
             "WAV contains no usable samples");
 
         audioData.clear();
+
+        return false;
+    }
+
+    if (sampleRate == 0)
+    {
+        SDL_Log(
+            "Invalid WAV sample rate");
+
+        audioData.clear();
+        monoSamples.clear();
+
+        title.clear();
+        artist.clear();
+        album.clear();
+        genre.clear();
 
         return false;
     }
@@ -119,7 +133,178 @@ bool MusicPlayer::load(
 
     loaded = true;
 
+    SDL_Log(
+        "Loaded track: %s",
+        path);
+
+    SDL_Log(
+        "Title: %s",
+        title.empty()
+            ? filename.c_str()
+            : title.c_str());
+
+    SDL_Log(
+        "Artist: %s",
+        artist.empty()
+            ? "Unknown"
+            : artist.c_str());
+
     return true;
+}
+
+bool MusicPlayer::loadDirectory(
+    const char* directory)
+{
+    if (directory == nullptr)
+        return false;
+
+    musicFiles.clear();
+    currentTrackIndex = 0;
+
+    try
+    {
+        for (const auto& entry :
+             std::filesystem::directory_iterator(
+                 directory))
+        {
+            if (!entry.is_regular_file())
+                continue;
+
+            const std::string extension =
+                entry.path().extension().string();
+
+            /*
+             * Only add WAV files.
+             */
+            if (extension == ".wav" ||
+                extension == ".WAV")
+            {
+                musicFiles.push_back(
+                    entry.path().string());
+            }
+        }
+    }
+    catch (
+        const std::filesystem::filesystem_error& e)
+    {
+        SDL_Log(
+            "Failed to scan music directory '%s': %s",
+            directory,
+            e.what());
+
+        return false;
+    }
+
+    if (musicFiles.empty())
+    {
+        SDL_Log(
+            "No WAV files found in '%s'",
+            directory);
+
+        return false;
+    }
+
+    /*
+     * Keep the playlist order deterministic.
+     */
+    std::sort(
+        musicFiles.begin(),
+        musicFiles.end());
+
+    SDL_Log(
+        "Found %zu music tracks",
+        musicFiles.size());
+
+    for (size_t i = 0;
+         i < musicFiles.size();
+         ++i)
+    {
+        SDL_Log(
+            "Track %zu: %s",
+            i + 1,
+            musicFiles[i].c_str());
+    }
+
+    return loadCurrentTrack();
+}
+
+bool MusicPlayer::loadCurrentTrack()
+{
+    if (musicFiles.empty())
+        return false;
+
+    if (currentTrackIndex >= musicFiles.size())
+        currentTrackIndex = 0;
+
+    return load(
+        musicFiles[currentTrackIndex].c_str());
+}
+
+void MusicPlayer::next()
+{
+    if (musicFiles.empty())
+        return;
+
+    /*
+     * Move to the next track.
+     *
+     * Wrap around when reaching the end.
+     */
+    currentTrackIndex =
+        (currentTrackIndex + 1) %
+        musicFiles.size();
+
+    SDL_Log(
+        "Next track: %zu / %zu",
+        currentTrackIndex + 1,
+        musicFiles.size());
+
+    if (loadCurrentTrack())
+    {
+        play();
+    }
+}
+
+void MusicPlayer::previous()
+{
+    if (musicFiles.empty())
+        return;
+
+    /*
+     * Move backwards.
+     *
+     * If we're already at track 0,
+     * wrap around to the last track.
+     */
+    if (currentTrackIndex == 0)
+    {
+        currentTrackIndex =
+            musicFiles.size() - 1;
+    }
+    else
+    {
+        --currentTrackIndex;
+    }
+
+    SDL_Log(
+        "Previous track: %zu / %zu",
+        currentTrackIndex + 1,
+        musicFiles.size());
+
+    if (loadCurrentTrack())
+    {
+        play();
+    }
+}
+
+size_t MusicPlayer::getTrackIndex() const
+{
+    return currentTrackIndex;
+}
+
+size_t MusicPlayer::getTrackCount() const
+{
+    return musicFiles.size();
 }
 
 bool MusicPlayer::createAudioStream(
@@ -127,11 +312,6 @@ bool MusicPlayer::createAudioStream(
 {
     destroyAudioStream();
 
-    /*
-     * SDL_AudioStream lets us provide the WAV's original
-     * format while SDL handles conversion to the playback
-     * device format.
-     */
     audioStream =
         SDL_OpenAudioDeviceStream(
             SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
@@ -171,55 +351,145 @@ void MusicPlayer::update()
     if (audioStream == nullptr)
         return;
 
+    /*
+     * Keep the audio stream supplied with data.
+     */
     fillAudioStream();
 
     /*
-     * The stream is playing asynchronously.
+     * playbackPosition is the number of SOURCE BYTES
+     * submitted to SDL.
      *
-     * We use our source position to maintain the logical
-     * playback position for the UI.
+     * SDL_GetAudioStreamQueued() returns the number of
+     * source bytes still waiting in the stream.
+     *
+     * submitted - queued = consumed.
      */
+    const int queuedResult =
+        SDL_GetAudioStreamQueued(
+            audioStream);
+
+    if (queuedResult < 0)
+    {
+        SDL_Log(
+            "SDL_GetAudioStreamQueued failed: %s",
+            SDL_GetError());
+
+        return;
+    }
+
+    const size_t queuedBytes =
+        static_cast<size_t>(queuedResult);
+
+    const size_t bytesPerSample =
+        SDL_AUDIO_BITSIZE(
+            sourceSpec.format) / 8;
+
+    const size_t bytesPerFrame =
+        bytesPerSample *
+        static_cast<size_t>(
+            sourceSpec.channels);
+
+    if (bytesPerFrame == 0 ||
+        sampleRate == 0)
+    {
+        return;
+    }
+
+    const size_t consumedBytes =
+        playbackPosition > queuedBytes
+            ? playbackPosition - queuedBytes
+            : 0;
+
+    const size_t consumedFrames =
+        consumedBytes / bytesPerFrame;
+
     currentTime =
-        static_cast<float>(playbackPosition) /
+        static_cast<float>(consumedFrames) /
         static_cast<float>(sampleRate);
 
-    if (currentTime >= duration)
+    /*
+     * The entire track has finished only when:
+     *
+     * 1. All source data has been submitted.
+     * 2. SDL has consumed all queued data.
+     */
+    if (playbackPosition >= audioData.size() &&
+        queuedBytes == 0)
     {
-        stop();
+        currentTime = duration;
+
+        playing = false;
+
+        SDL_PauseAudioStreamDevice(
+            audioStream);
+
+        /*
+         * Automatically advance to the next track.
+         */
+        if (!musicFiles.empty())
+        {
+            currentTrackIndex =
+                (currentTrackIndex + 1) %
+                musicFiles.size();
+
+            SDL_Log(
+                "Track finished. Advancing to track %zu / %zu",
+                currentTrackIndex + 1,
+                musicFiles.size());
+
+            if (loadCurrentTrack())
+            {
+                play();
+            }
+        }
     }
 }
 
 void MusicPlayer::fillAudioStream()
 {
+    if (audioStream == nullptr)
+        return;
+
     if (playbackPosition >= audioData.size())
         return;
 
-    /*
-     * Keep approximately 100 ms of source audio queued.
-     *
-     * For the first implementation, calculate this using
-     * the source format.
-     */
     const size_t bytesPerSample =
-        SDL_AUDIO_BITSIZE(sourceSpec.format) / 8;
+        SDL_AUDIO_BITSIZE(
+            sourceSpec.format) / 8;
 
     const size_t bytesPerFrame =
         bytesPerSample *
-        static_cast<size_t>(sourceSpec.channels);
+        static_cast<size_t>(
+            sourceSpec.channels);
 
     if (bytesPerFrame == 0)
         return;
 
+    /*
+     * Keep approximately 100 ms of audio queued.
+     */
     const size_t targetBytes =
         static_cast<size_t>(
-            sourceSpec.freq *
-            bytesPerFrame *
+            static_cast<float>(sourceSpec.freq) *
+            static_cast<float>(bytesPerFrame) *
             0.10f);
 
+    const int queuedResult =
+        SDL_GetAudioStreamQueued(
+            audioStream);
+
+    if (queuedResult < 0)
+    {
+        SDL_Log(
+            "SDL_GetAudioStreamQueued failed: %s",
+            SDL_GetError());
+
+        return;
+    }
+
     const size_t queued =
-        static_cast<size_t>(
-            SDL_GetAudioStreamQueued(
-                audioStream));
+        static_cast<size_t>(queuedResult);
 
     if (queued >= targetBytes)
         return;
@@ -228,17 +498,29 @@ void MusicPlayer::fillAudioStream()
         audioData.size() -
         playbackPosition;
 
-    const size_t bytesToQueue =
+    const size_t availableBytes =
+        targetBytes -
+        queued;
+
+    /*
+     * Only queue complete audio frames.
+     */
+    const size_t framesToQueue =
         std::min(
-            remaining,
-            targetBytes - queued);
+            remaining / bytesPerFrame,
+            availableBytes / bytesPerFrame);
+
+    const size_t bytesToQueue =
+        framesToQueue *
+        bytesPerFrame;
 
     if (bytesToQueue == 0)
         return;
 
     if (!SDL_PutAudioStreamData(
             audioStream,
-            audioData.data() + playbackPosition,
+            audioData.data() +
+                playbackPosition,
             static_cast<int>(bytesToQueue)))
     {
         SDL_Log(
@@ -248,6 +530,10 @@ void MusicPlayer::fillAudioStream()
         return;
     }
 
+    /*
+     * playbackPosition represents SOURCE DATA
+     * submitted to SDL.
+     */
     playbackPosition += bytesToQueue;
 }
 
@@ -260,14 +546,16 @@ void MusicPlayer::play()
         return;
 
     /*
-     * If we reached the end, restart.
+     * If we're at the end, restart the current
+     * track from the beginning.
      */
     if (playbackPosition >= audioData.size())
     {
         playbackPosition = 0;
         currentTime = 0.0f;
 
-        SDL_ClearAudioStream(audioStream);
+        SDL_ClearAudioStream(
+            audioStream);
     }
 
     playing = true;
@@ -322,16 +610,48 @@ void MusicPlayer::seek(float time)
         0.0f,
         duration);
 
-    playbackPosition =
+    const size_t bytesPerSample =
+        SDL_AUDIO_BITSIZE(
+            sourceSpec.format) / 8;
+
+    const size_t bytesPerFrame =
+        bytesPerSample *
+        static_cast<size_t>(
+            sourceSpec.channels);
+
+    if (bytesPerFrame == 0 ||
+        sampleRate == 0)
+    {
+        return;
+    }
+
+    /*
+     * Convert time -> frame.
+     */
+    const size_t targetFrame =
         static_cast<size_t>(
             time *
             static_cast<float>(sampleRate));
 
-    currentTime = time;
+    /*
+     * Convert frame -> source bytes.
+     */
+    playbackPosition =
+        std::min(
+            targetFrame * bytesPerFrame,
+            audioData.size());
 
+    currentTime =
+        static_cast<float>(targetFrame) /
+        static_cast<float>(sampleRate);
+
+    /*
+     * Discard previously queued audio.
+     */
     if (audioStream != nullptr)
     {
-        SDL_ClearAudioStream(audioStream);
+        SDL_ClearAudioStream(
+            audioStream);
 
         if (playing)
         {
@@ -374,6 +694,31 @@ float MusicPlayer::getDuration() const
     return duration;
 }
 
+const std::string& MusicPlayer::getFilename() const
+{
+    return filename;
+}
+
+const std::string& MusicPlayer::getTitle() const
+{
+    return title;
+}
+
+const std::string& MusicPlayer::getArtist() const
+{
+    return artist;
+}
+
+const std::string& MusicPlayer::getAlbum() const
+{
+    return album;
+}
+
+const std::string& MusicPlayer::getGenre() const
+{
+    return genre;
+}
+
 void MusicPlayer::convertToMono(
     const std::vector<Uint8>& sourceData,
     const SDL_AudioSpec& sourceSpec)
@@ -383,14 +728,6 @@ void MusicPlayer::convertToMono(
     if (sourceData.empty())
         return;
 
-    /*
-     * This first backend supports the common WAV formats:
-     *
-     *   S16
-     *   F32
-     *
-     * Stereo is averaged into mono.
-     */
     const size_t channels =
         static_cast<size_t>(
             sourceSpec.channels);
@@ -481,4 +818,201 @@ void MusicPlayer::convertToMono(
 
         monoSamples.clear();
     }
+}
+
+void MusicPlayer::parseWavMetadata(
+    const std::vector<Uint8>& data)
+{
+    title.clear();
+    artist.clear();
+    album.clear();
+    genre.clear();
+
+    if (data.size() < 12)
+        return;
+
+    if (std::memcmp(
+            data.data(),
+            "RIFF",
+            4) != 0)
+    {
+        return;
+    }
+
+    if (std::memcmp(
+            data.data() + 8,
+            "WAVE",
+            4) != 0)
+    {
+        return;
+    }
+
+    size_t offset = 12;
+
+    while (offset + 8 <= data.size())
+    {
+        const char* chunkId =
+            reinterpret_cast<const char*>(
+                data.data() + offset);
+
+        const Uint32 chunkSize =
+            static_cast<Uint32>(
+                data[offset + 4]) |
+            (static_cast<Uint32>(
+                data[offset + 5]) << 8) |
+            (static_cast<Uint32>(
+                data[offset + 6]) << 16) |
+            (static_cast<Uint32>(
+                data[offset + 7]) << 24);
+
+        offset += 8;
+
+        if (chunkSize >
+            data.size() - offset)
+        {
+            break;
+        }
+
+        if (std::memcmp(
+                chunkId,
+                "LIST",
+                4) == 0 &&
+            chunkSize >= 4)
+        {
+            const char* listType =
+                reinterpret_cast<const char*>(
+                    data.data() + offset);
+
+            if (std::memcmp(
+                    listType,
+                    "INFO",
+                    4) == 0)
+            {
+                size_t infoOffset =
+                    offset + 4;
+
+                const size_t infoEnd =
+                    offset + chunkSize;
+
+                while (infoOffset + 8 <= infoEnd)
+                {
+                    const char* infoId =
+                        reinterpret_cast<const char*>(
+                            data.data() +
+                            infoOffset);
+
+                    const Uint32 infoSize =
+                        static_cast<Uint32>(
+                            data[infoOffset + 4]) |
+                        (static_cast<Uint32>(
+                            data[infoOffset + 5]) << 8) |
+                        (static_cast<Uint32>(
+                            data[infoOffset + 6]) << 16) |
+                        (static_cast<Uint32>(
+                            data[infoOffset + 7]) << 24);
+
+                    infoOffset += 8;
+
+                    if (infoSize >
+                        infoEnd - infoOffset)
+                    {
+                        break;
+                    }
+
+                    std::string value;
+
+                    if (infoSize > 0)
+                    {
+                        value.assign(
+                            reinterpret_cast<const char*>(
+                                data.data() +
+                                infoOffset),
+                            infoSize);
+
+                        const size_t nullPos =
+                            value.find('\0');
+
+                        if (nullPos !=
+                            std::string::npos)
+                        {
+                            value.resize(nullPos);
+                        }
+
+                        while (!value.empty() &&
+                               (value.back() == ' ' ||
+                                value.back() == '\t' ||
+                                value.back() == '\r' ||
+                                value.back() == '\n'))
+                        {
+                            value.pop_back();
+                        }
+
+                        size_t first = 0;
+
+                        while (first < value.size() &&
+                               (value[first] == ' ' ||
+                                value[first] == '\t' ||
+                                value[first] == '\r' ||
+                                value[first] == '\n'))
+                        {
+                            ++first;
+                        }
+
+                        if (first > 0)
+                        {
+                            value.erase(
+                                0,
+                                first);
+                        }
+                    }
+
+                    if (std::memcmp(
+                            infoId,
+                            "INAM",
+                            4) == 0)
+                    {
+                        title = value;
+                    }
+                    else if (std::memcmp(
+                                 infoId,
+                                 "IART",
+                                 4) == 0)
+                    {
+                        artist = value;
+                    }
+                    else if (std::memcmp(
+                                 infoId,
+                                 "IPRD",
+                                 4) == 0)
+                    {
+                        album = value;
+                    }
+                    else if (std::memcmp(
+                                 infoId,
+                                 "IGNR",
+                                 4) == 0)
+                    {
+                        genre = value;
+                    }
+
+                    infoOffset += infoSize;
+
+                    if (infoSize & 1)
+                        ++infoOffset;
+                }
+            }
+        }
+
+        offset += chunkSize;
+
+        if (chunkSize & 1)
+            ++offset;
+    }
+
+    SDL_Log(
+        "WAV metadata: title='%s', artist='%s', album='%s', genre='%s'",
+        title.c_str(),
+        artist.c_str(),
+        album.c_str(),
+        genre.c_str());
 }

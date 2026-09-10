@@ -11,7 +11,6 @@ namespace
     // Layout
     // ========================================================
 
-    constexpr float HEADER_HEIGHT = 35.0f;
     constexpr float SPECTRUM_HEIGHT = 155.0f;
     constexpr float SONG_INFO_HEIGHT = 58.0f;
     constexpr float PROGRESS_HEIGHT = 45.0f;
@@ -20,6 +19,10 @@ namespace
     constexpr float CONTROL_SPACING = 78.0f;
     constexpr float PLAY_BUTTON_RADIUS = 27.0f;
     constexpr float SIDE_BUTTON_SIZE = 52.0f;
+    constexpr float MUSIC_PANEL_X = 0.0f;
+    constexpr float MUSIC_PANEL_Y = 0.0f;
+    constexpr float MUSIC_PANEL_WIDTH = 560.0f;
+    constexpr float MUSIC_PANEL_HEIGHT = 343.0f;
 
     // ========================================================
     // Font sizes
@@ -155,8 +158,7 @@ bool MusicRenderer::initialize(
      * This will eventually become the selected MP3/music
      * source when the audio backend is expanded.
      */
-    if (!musicPlayer.load(
-            "../assets/music/test.wav"))
+    if (!musicPlayer.loadDirectory("../assets/music"))
     {
         SDL_Log(
             "MusicRenderer: failed to load test music");
@@ -257,25 +259,39 @@ void MusicRenderer::render(
     if (sdlRenderer == nullptr)
         return;
 
+
+    // ========================================================
+    // Translucent music panel
+    // ========================================================
+
+    SDL_FRect panelBounds{
+        bounds.x + MUSIC_PANEL_X,
+        bounds.y + MUSIC_PANEL_Y,
+        MUSIC_PANEL_WIDTH,
+        MUSIC_PANEL_HEIGHT
+    };
+
+    SDL_SetRenderDrawBlendMode(
+        sdlRenderer,
+        SDL_BLENDMODE_BLEND);
+
+    SDL_SetRenderDrawColor(
+        sdlRenderer,
+        255,
+        252,
+        240,
+        205);
+
+    SDL_RenderFillRect(
+        sdlRenderer,
+        &panelBounds);
+
     /*
      * Divide the music area vertically.
      */
 
     float y =
         bounds.y;
-
-    // --------------------------------------------------------
-    // Header
-    // --------------------------------------------------------
-
-    SDL_FRect headerBounds{
-        bounds.x,
-        y,
-        bounds.w,
-        HEADER_HEIGHT
-    };
-
-    y += HEADER_HEIGHT;
 
     // --------------------------------------------------------
     // Spectrum
@@ -388,9 +404,19 @@ void MusicRenderer::renderSongInfo(
 
     constexpr float LEFT_PADDING = 10.0f;
 
+    const char* title =
+        musicPlayer.getTitle().empty()
+            ? musicPlayer.getFilename().c_str()
+            : musicPlayer.getTitle().c_str();
+
+    const char* artist =
+        musicPlayer.getArtist().empty()
+            ? "Unknown Artist"
+            : musicPlayer.getArtist().c_str();
+
     renderText(
         sdlRenderer,
-        songTitle,
+        title,
         titleFont,
         titleColor,
         bounds.x + LEFT_PADDING,
@@ -398,7 +424,7 @@ void MusicRenderer::renderSongInfo(
 
     renderText(
         sdlRenderer,
-        artistName,
+        artist,
         artistFont,
         artistColor,
         bounds.x + LEFT_PADDING,
@@ -587,8 +613,7 @@ void MusicRenderer::renderControls(
     renderPlayButton(
         sdlRenderer,
         centerX,
-        centerY,
-        PLAY_BUTTON_RADIUS);
+        centerY);
 
     /*
      * Next
@@ -605,152 +630,124 @@ void MusicRenderer::renderControls(
 // ============================================================
 
 void MusicRenderer::renderPlayButton(
-    SDL_Renderer* sdlRenderer,
+    SDL_Renderer* renderer,
     float centerX,
-    float centerY,
-    float radius)
+    float centerY)
 {
-    /*
-     * Subtle pulse while playing.
-     */
+    if (renderer == nullptr)
+        return;
 
-    float pulse = 1.0f;
-
-    if (musicPlayer.isPlaying())
-    {
-        pulse +=
-            PLAYING_PULSE_AMOUNT *
-            std::sin(
-                animationTime *
-                ANIMATION_SPEED);
-    }
-
-    radius *= pulse;
-
-    /*
-     * SDL doesn't provide a filled circle primitive,
-     * so render one using horizontal scanlines.
-     */
+    constexpr float RADIUS = 27.0f;
 
     SDL_SetRenderDrawColor(
-        sdlRenderer,
-        primaryColor.r,
-        primaryColor.g,
-        primaryColor.b,
-        primaryColor.a);
+        renderer,
+        170,
+        220,
+        170,
+        255);
 
-    const int r =
-        static_cast<int>(radius);
-
-    const int cx =
-        static_cast<int>(centerX);
-
-    const int cy =
-        static_cast<int>(centerY);
-
-    for (int y = -r;
-         y <= r;
+    /*
+     * Draw a fixed-size circular play button.
+     */
+    for (int y = -static_cast<int>(RADIUS);
+         y <= static_cast<int>(RADIUS);
          ++y)
     {
-        const float fy =
-            static_cast<float>(y);
-
-        const float width =
-            std::sqrt(
-                std::max(
-                    0.0f,
-                    radius * radius -
-                    fy * fy));
-
-        SDL_RenderLine(
-            sdlRenderer,
-            centerX - width,
-            centerY + fy,
-            centerX + width,
-            centerY + fy);
+        for (int x = -static_cast<int>(RADIUS);
+             x <= static_cast<int>(RADIUS);
+             ++x)
+        {
+            if (x * x + y * y <=
+                RADIUS * RADIUS)
+            {
+                SDL_RenderPoint(
+                    renderer,
+                    centerX + static_cast<float>(x),
+                    centerY + static_cast<float>(y));
+            }
+        }
     }
 
     /*
-     * Icon.
+     * Fixed play/pause icon.
+     *
+     * Play = right-facing triangle
+     * Pause = two vertical bars
      */
-
     SDL_SetRenderDrawColor(
-        sdlRenderer,
-        iconColor.r,
-        iconColor.g,
-        iconColor.b,
-        iconColor.a);
+        renderer,
+        0,
+        0,
+        0,
+        255);
 
     if (musicPlayer.isPlaying())
     {
-        /*
-         * Pause icon.
-         */
-
-        constexpr float BAR_WIDTH = 5.0f;
-        constexpr float BAR_HEIGHT = 18.0f;
+        constexpr float BAR_WIDTH = 6.0f;
+        constexpr float BAR_HEIGHT = 20.0f;
+        constexpr float BAR_GAP = 5.0f;
 
         SDL_FRect leftBar{
-            centerX - 8.0f,
+            centerX - BAR_GAP / 2.0f - BAR_WIDTH,
             centerY - BAR_HEIGHT / 2.0f,
             BAR_WIDTH,
             BAR_HEIGHT
         };
 
         SDL_FRect rightBar{
-            centerX + 3.0f,
+            centerX + BAR_GAP / 2.0f,
             centerY - BAR_HEIGHT / 2.0f,
             BAR_WIDTH,
             BAR_HEIGHT
         };
 
         SDL_RenderFillRect(
-            sdlRenderer,
+            renderer,
             &leftBar);
 
         SDL_RenderFillRect(
-            sdlRenderer,
+            renderer,
             &rightBar);
     }
     else
     {
         /*
-         * Play triangle.
-         *
-         * Shifted 5 pixels to the right.
+         * Right-facing play triangle.
          */
+        SDL_Vertex vertices[3]{};
 
-        constexpr float ICON_OFFSET_X = 5.0f;
+        vertices[0].position = {
+            centerX - 7.0f,
+            centerY - 12.0f
+        };
 
-        const float iconCenterX =
-            centerX + ICON_OFFSET_X;
+        vertices[1].position = {
+            centerX - 7.0f,
+            centerY + 12.0f
+        };
 
-        /*
-         * Draw filled left-facing triangle.
-         */
+        vertices[2].position = {
+            centerX + 13.0f,
+            centerY
+        };
 
-        for (int y = -10;
-             y <= 10;
-             ++y)
+        for (auto& vertex : vertices)
         {
-            const float fy =
-                static_cast<float>(y);
-
-            const float normalized =
-                std::abs(fy) / 10.0f;
-
-            const float rightX =
-                iconCenterX +
-                7.0f -
-                18.0f * normalized;
-
-            SDL_RenderLine(
-                sdlRenderer,
-                iconCenterX - 11.0f,
-                centerY + fy,
-                rightX,
-                centerY + fy);
+            vertex.color = {
+                0,
+                0,
+                0,
+                255
+            };
         }
+
+        SDL_RenderGeometry(
+            renderer,
+            nullptr,
+            vertices,
+            3,
+            nullptr,
+            0);
     }
 }
 
@@ -763,18 +760,28 @@ void MusicRenderer::renderPreviousButton(
     float centerX,
     float centerY)
 {
+    if (sdlRenderer == nullptr)
+        return;
+
     SDL_SetRenderDrawColor(
         sdlRenderer,
-        titleColor.r,
-        titleColor.g,
-        titleColor.b,
-        titleColor.a);
+        0,
+        0,
+        0,
+        255);
 
     constexpr float BAR_WIDTH = 4.0f;
-    constexpr float BAR_HEIGHT = 20.0f;
+    constexpr float BAR_HEIGHT = 22.0f;
+
+    /*
+     * Previous = |◀
+     *
+     * The bar is on the LEFT.
+     * The triangle points LEFT.
+     */
 
     SDL_FRect bar{
-        centerX - 12.0f,
+        centerX - 14.0f,
         centerY - BAR_HEIGHT / 2.0f,
         BAR_WIDTH,
         BAR_HEIGHT
@@ -784,32 +791,40 @@ void MusicRenderer::renderPreviousButton(
         sdlRenderer,
         &bar);
 
-    /*
-     * Filled left-facing triangle.
-     */
+    SDL_Vertex vertices[3]{};
 
-    for (int y = -10;
-         y <= 10;
-         ++y)
+    vertices[0].position = {
+        centerX + 10.0f,
+        centerY - 11.0f
+    };
+
+    vertices[1].position = {
+        centerX - 8.0f,
+        centerY
+    };
+
+    vertices[2].position = {
+        centerX + 10.0f,
+        centerY + 11.0f
+    };
+
+    for (auto& vertex : vertices)
     {
-        const float fy =
-            static_cast<float>(y);
-
-        const float normalized =
-            std::abs(fy) / 10.0f;
-
-        const float leftX =
-            centerX -
-            8.0f +
-            18.0f * normalized;
-
-        SDL_RenderLine(
-            sdlRenderer,
-            leftX,
-            centerY + fy,
-            centerX + 8.0f,
-            centerY + fy);
+        vertex.color = {
+            0,
+            0,
+            0,
+            255
+        };
     }
+
+    SDL_RenderGeometry(
+        sdlRenderer,
+        nullptr,
+        vertices,
+        3,
+        nullptr,
+        0);
 }
 
 // ============================================================
@@ -821,18 +836,63 @@ void MusicRenderer::renderNextButton(
     float centerX,
     float centerY)
 {
+    if (sdlRenderer == nullptr)
+        return;
+
     SDL_SetRenderDrawColor(
         sdlRenderer,
-        titleColor.r,
-        titleColor.g,
-        titleColor.b,
-        titleColor.a);
+        0,
+        0,
+        0,
+        255);
 
     constexpr float BAR_WIDTH = 4.0f;
-    constexpr float BAR_HEIGHT = 20.0f;
+    constexpr float BAR_HEIGHT = 22.0f;
+
+    /*
+     * Next = ▶|
+     *
+     * The triangle points RIGHT.
+     * The bar is on the RIGHT.
+     */
+
+    SDL_Vertex vertices[3]{};
+
+    vertices[0].position = {
+        centerX - 10.0f,
+        centerY - 11.0f
+    };
+
+    vertices[1].position = {
+        centerX + 8.0f,
+        centerY
+    };
+
+    vertices[2].position = {
+        centerX - 10.0f,
+        centerY + 11.0f
+    };
+
+    for (auto& vertex : vertices)
+    {
+        vertex.color = {
+            0,
+            0,
+            0,
+            255
+        };
+    }
+
+    SDL_RenderGeometry(
+        sdlRenderer,
+        nullptr,
+        vertices,
+        3,
+        nullptr,
+        0);
 
     SDL_FRect bar{
-        centerX + 8.0f,
+        centerX + 10.0f,
         centerY - BAR_HEIGHT / 2.0f,
         BAR_WIDTH,
         BAR_HEIGHT
@@ -841,33 +901,6 @@ void MusicRenderer::renderNextButton(
     SDL_RenderFillRect(
         sdlRenderer,
         &bar);
-
-    /*
-     * Filled right-facing triangle.
-     */
-
-    for (int y = -10;
-         y <= 10;
-         ++y)
-    {
-        const float fy =
-            static_cast<float>(y);
-
-        const float normalized =
-            std::abs(fy) / 10.0f;
-
-        const float rightX =
-            centerX +
-            8.0f -
-            18.0f * normalized;
-
-        SDL_RenderLine(
-            sdlRenderer,
-            centerX - 8.0f,
-            centerY + fy,
-            rightX,
-            centerY + fy);
-    }
 }
 
 // ============================================================
@@ -1022,7 +1055,6 @@ void MusicRenderer::handleTouch(
 
     float currentY =
         bounds.y +
-        HEADER_HEIGHT +
         SPECTRUM_HEIGHT +
         SONG_INFO_HEIGHT;
 
@@ -1104,8 +1136,8 @@ void MusicRenderer::handleTouch(
     }
 
     /*
-     * Previous.
-     */
+    * Previous.
+    */
 
     SDL_FRect previousButton{
         centerX -
@@ -1122,18 +1154,14 @@ void MusicRenderer::handleTouch(
             y,
             previousButton))
     {
-        musicPlayer.stop();
-        musicPlayer.play();
-
+        musicPlayer.previous();
         return;
     }
 
     /*
-     * Next.
-     *
-     * We only have one song right now, so next also
-     * restarts the current track.
-     */
+    * Next.
+    */
+
     SDL_FRect nextButton{
         centerX +
             CONTROL_SPACING -
@@ -1149,9 +1177,7 @@ void MusicRenderer::handleTouch(
             y,
             nextButton))
     {
-        musicPlayer.stop();
-        musicPlayer.play();
-
+        musicPlayer.next();
         return;
     }
 }

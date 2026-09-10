@@ -8,9 +8,9 @@
 #include <iostream>
 
 #include "SDL3Display.hpp"
-#include "ClockManager.hpp"
-#include "ClockTime.hpp"
-#include "TimeOfDay.hpp"
+#include "../clock/ClockManager.hpp"
+#include "../clock/ClockTime.hpp"
+#include "../clock/TimeOfDay.hpp"
 #include "../music/MusicManager.hpp"
 
 enum class AppMode
@@ -44,10 +44,10 @@ constexpr float POCHACCO_HEIGHT =
 
 // Music spectrum analyzer: top-left.
 constexpr SDL_FRect MUSIC_BOUNDS = {
-    35.0f,
-    30.0f,
-    530.0f,
-    350.0f
+    20.0f,    // x
+    50.0f,    // y
+    560.0f,   // width
+    420.0f    // height
 };
 
 // Digital clock: center-left.
@@ -72,6 +72,9 @@ constexpr SDL_FRect POCHACCO_BOUNDS = {
 
 constexpr const char* POCHACCO_PATH =
     "../assets/pochacco-green.png";
+
+constexpr const char* SIMBA_PATH =
+    "../assets/Simba.gif";
 
 constexpr const char* MORNING_PATH =
     "../assets/morning.jpg";

@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <filesystem>
 
 class MusicPlayer
 {
@@ -15,8 +16,14 @@ public:
 
     bool initialize();
 
-    bool load(
-        const char* path);
+    bool load(const char* path);
+    bool loadDirectory(const char* directory);
+
+    void next();
+    void previous();
+
+    size_t getTrackIndex() const;
+    size_t getTrackCount() const;
 
     void update();
 
@@ -35,6 +42,12 @@ public:
 
     float getCurrentTime() const;
     float getDuration() const;
+
+    const std::string& getFilename() const;
+    const std::string& getTitle() const;
+    const std::string& getArtist() const;
+    const std::string& getAlbum() const;
+    const std::string& getGenre() const;
 
 private:
     bool createAudioStream(
@@ -58,6 +71,8 @@ private:
     std::vector<float> monoSamples;
 
     size_t playbackPosition = 0;
+    
+    size_t queuedPlaybackBytes = 0;
 
     size_t sampleRate = 44100;
 
@@ -68,4 +83,18 @@ private:
 
     float currentTime = 0.0f;
     float duration = 0.0f;
+
+    std::string filename;
+    std::string title;
+    std::string artist;
+    std::string album;
+    std::string genre;
+
+    void parseWavMetadata(
+        const std::vector<Uint8>& data);
+
+    std::vector<std::string> musicFiles;
+    size_t currentTrackIndex = 0;
+
+    bool loadCurrentTrack();
 };
