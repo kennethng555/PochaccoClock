@@ -50,16 +50,12 @@ public:
         float x,
         float y,
         const SDL_FRect& bounds) const;
-    
-    bool isPlayButtonClicked(
-        float x,
-        float y,
-        const SDL_FRect& bounds) const;
-
-    void togglePlayPause();
 
     MusicPlayer& getMusicPlayer();
     const MusicPlayer& getMusicPlayer() const;
+
+    void playSound(
+        const std::string& path);
 
 private:
     // ========================================================

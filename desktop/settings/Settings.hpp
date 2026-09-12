@@ -31,6 +31,13 @@ struct AlarmConfig
     bool playMusic = true;
     bool showAnimation = true;
 
+    std::string soundPath =
+        "../assets/alarm/alarm.wav";
+
+    /*
+     * Runtime state.
+     * Do not persist this value.
+     */
     bool triggeredToday = false;
 };
 
@@ -69,8 +76,6 @@ struct AnimationConfig
 
 struct MusicSettings
 {
-    bool enabled = false;
-
     std::string songPath;
 
     bool loop = true;

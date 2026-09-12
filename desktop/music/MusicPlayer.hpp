@@ -37,6 +37,7 @@ public:
     bool isLoaded() const;
     bool isLooping() const;
     void toggleLooping();
+    void setLooping(bool enabled);
 
     bool isShuffling() const;
     void toggleShuffling();

@@ -36,11 +36,25 @@ bool MusicManager::initialize(
     return true;
 }
 
-void MusicManager::update()
+void MusicManager::update(
+    float deltaTime)
 {
     if (!initialized)
         return;
 
+    if (alarmPlaying)
+    {
+        alarmTimer += deltaTime;
+
+        if (alarmTimer >= 30.0f)
+        {
+            musicBoxPlayer.stop();
+
+            alarmPlaying = false;
+            alarmTimer = 0.0f;
+        }
+    }
+    
     /*
      * Update the full Music Player.
      */
@@ -291,4 +305,68 @@ void MusicManager::stopMusicBox()
 bool MusicManager::isMusicBoxPlaying() const
 {
     return musicBoxPlaying;
+}
+
+void MusicManager::setLooping(bool enabled)
+{
+    if (!initialized)
+        return;
+
+    MusicPlayer& player =
+        renderer.getMusicPlayer();
+
+    player.setLooping(enabled);
+}
+
+void MusicManager::playSound(
+    const std::string& path)
+{
+    if (!initialized)
+        return;
+
+    if (path.empty())
+    {
+        SDL_Log(
+            "MusicManager: alarm sound path is empty");
+
+        return;
+    }
+
+    MusicPlayer& player =
+        renderer.getMusicPlayer();
+
+    /*
+     * Pause normal Music Player.
+     */
+    if (player.isPlaying())
+    {
+        player.pause();
+    }
+
+    /*
+     * Stop Music Box.
+     */
+    musicBoxPlayer.stop();
+
+    if (!musicBoxPlayer.load(path.c_str()))
+    {
+        SDL_Log(
+            "MusicManager: failed to load alarm sound: %s",
+            path.c_str());
+
+        alarmPlaying = false;
+
+        return;
+    }
+
+    /*
+     * Alarm is a one-shot sound.
+     * The timer below controls its duration.
+     */
+    musicBoxPlayer.setLooping(true);
+
+    musicBoxPlayer.play();
+
+    alarmPlaying = true;
+    alarmTimer = 0.0f;
 }

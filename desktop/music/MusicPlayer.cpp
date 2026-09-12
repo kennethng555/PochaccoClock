@@ -830,6 +830,18 @@ void MusicPlayer::toggleLooping()
     }
 }
 
+void MusicPlayer::setLooping(bool enabled)
+{
+    looping = enabled;
+
+    if (looping)
+    {
+        shuffling = false;
+        shuffledTracks.clear();
+        shufflePosition = 0;
+    }
+}
+
 const float* MusicPlayer::getSamples() const
 {
     if (monoSamples.empty())

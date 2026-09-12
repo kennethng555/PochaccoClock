@@ -13,7 +13,7 @@ public:
 
     bool initialize(SDL_Renderer* renderer);
 
-    void update();
+    void update(float deltaTime);
 
     void render(
         SDL_Renderer* renderer,
@@ -43,6 +43,11 @@ public:
 
     bool isMusicBoxPlaying() const;
 
+    void setLooping(bool enabled);
+
+    void playSound(
+        const std::string& path);
+
 private:
     MusicRenderer renderer;
 
@@ -51,4 +56,7 @@ private:
     bool initialized = false;
 
     bool musicBoxPlaying = false;
+
+    bool alarmPlaying = false;
+    float alarmTimer = 0.0f;
 };

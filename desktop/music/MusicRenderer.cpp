@@ -1327,18 +1327,6 @@ void MusicRenderer::seekFromPosition(
 }
 
 // ============================================================
-// Playback
-// ============================================================
-
-void MusicRenderer::togglePlayPause()
-{
-    if (!initialized)
-        return;
-
-    musicPlayer.togglePlayPause();
-}
-
-// ============================================================
 // Music Player Access
 // ============================================================
 

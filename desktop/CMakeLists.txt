@@ -8,6 +8,16 @@ project(PochaccoClockDesktop
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+
+include(FetchContent)
+
+FetchContent_Declare(
+    nlohmann_json
+    URL https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz
+)
+
+FetchContent_MakeAvailable(nlohmann_json)
+
 # --------------------------------------------------
 # SDL3
 # --------------------------------------------------
@@ -62,6 +72,7 @@ add_executable(PochaccoClock
     music/MusicManager.cpp
     music/MusicPlayer.cpp
     settings/Settings.cpp
+    settings/SettingsRenderer.cpp
 
     ../shared/Clock.cpp
 )
@@ -76,4 +87,5 @@ target_link_libraries(PochaccoClock
         SDL3::SDL3
         SDL3_image::SDL3_image
         SDL3_ttf::SDL3_ttf
+        nlohmann_json::nlohmann_json
 )

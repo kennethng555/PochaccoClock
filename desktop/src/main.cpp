@@ -6,17 +6,24 @@
 #include <cmath>
 #include <ctime>
 #include <iostream>
+#include <filesystem>
+#include <vector>
+#include <algorithm>
 
 #include "SDL3Display.hpp"
 #include "../clock/ClockManager.hpp"
 #include "../clock/ClockTime.hpp"
 #include "../clock/TimeOfDay.hpp"
 #include "../music/MusicManager.hpp"
+#include "../settings/Settings.hpp"
+#include "../settings/SettingsRenderer.hpp"
+#include "../settings/SettingsAction.hpp"
 
 enum class AppMode
 {
     Clock,
-    Music
+    Music,
+    Settings
 };
 
 // ============================================================
@@ -47,7 +54,7 @@ constexpr SDL_FRect MUSIC_BOUNDS = {
     20.0f,    // x
     50.0f,    // y
     560.0f,   // width
-    420.0f    // height
+    350.0f    // height
 };
 
 // Digital clock: center-left.
@@ -257,6 +264,378 @@ void drawMusicBoxButton(
     SDL_DestroySurface(surface);
 }
 
+namespace
+{
+std::vector<std::string> getMusicBoxSongs()
+{
+    namespace fs = std::filesystem;
+
+    std::vector<std::string> songs;
+
+    const fs::path musicBoxDirectory =
+        "../assets/music";
+
+    if (!fs::exists(musicBoxDirectory) ||
+        !fs::is_directory(musicBoxDirectory))
+    {
+        SDL_Log(
+            "Music Box directory not found: %s",
+            musicBoxDirectory.string().c_str());
+
+        return songs;
+    }
+
+    for (const auto& entry :
+         fs::directory_iterator(musicBoxDirectory))
+    {
+        if (!entry.is_regular_file())
+            continue;
+
+        const std::string extension =
+            entry.path().extension().string();
+
+        if (extension == ".wav" ||
+            extension == ".WAV")
+        {
+            songs.push_back(
+                entry.path().string());
+        }
+    }
+
+    std::sort(
+        songs.begin(),
+        songs.end());
+
+    return songs;
+}
+
+void handleSettingsAction(
+    SettingsAction action,
+    Settings& settings,
+    SettingsRenderer& settingsRenderer,
+    MusicManager& musicManager,
+    AppMode& currentMode)
+{
+    constexpr const char* SETTINGS_PATH = "../assets/settings/settings.json";
+
+    switch (action)
+    {
+        case SettingsAction::ToggleMusicLoop:
+        {
+            settings.get().music.loop =
+                !settings.get().music.loop;
+
+            musicManager.setLooping(
+                settings.get().music.loop);
+
+            settings.save(SETTINGS_PATH);
+
+            break;
+        }
+
+        case SettingsAction::SelectMusicSong:
+        {
+            const std::vector<std::string> songs =
+                getMusicBoxSongs();
+
+            if (songs.empty())
+            {
+                SDL_Log(
+                    "Settings: no Music Box songs found");
+                break;
+            }
+
+            auto& currentSong =
+                settings.get().music.songPath;
+
+            auto currentIt =
+                std::find(
+                    songs.begin(),
+                    songs.end(),
+                    currentSong);
+
+            if (currentIt == songs.end())
+            {
+                currentSong = songs.front();
+            }
+            else
+            {
+                ++currentIt;
+
+                if (currentIt == songs.end())
+                    currentIt = songs.begin();
+
+                currentSong = *currentIt;
+            }
+
+            settings.save(SETTINGS_PATH);
+
+            break;
+        }
+
+        case SettingsAction::SelectAlarm:
+        {
+            /*
+             * Renderer handles the selection.
+             */
+            break;
+        }
+
+        case SettingsAction::AddAlarm:
+        {
+            AlarmConfig newAlarm;
+
+            newAlarm.enabled = false;
+            newAlarm.hour = 7;
+            newAlarm.minute = 0;
+
+            newAlarm.repeatDays = {
+                true,
+                true,
+                true,
+                true,
+                true,
+                false,
+                false
+            };
+
+            newAlarm.playMusic = true;
+            newAlarm.showAnimation = true;
+
+            newAlarm.soundPath =
+                "../assets/alarm/alarm.wav";
+
+            settings.get().alarms.push_back(
+                newAlarm);
+
+            settings.save(SETTINGS_PATH);
+
+            break;
+        }
+
+        case SettingsAction::ToggleAlarmEnabled:
+        {
+            auto& alarms = settings.get().alarms;
+
+            const std::size_t index =
+                settingsRenderer.getSelectedAlarm();
+
+            if (index < alarms.size())
+            {
+                alarms[index].enabled =
+                    !alarms[index].enabled;
+
+                settings.save(SETTINGS_PATH);
+            }
+
+            break;
+        }
+
+        case SettingsAction::AdjustAlarmHour:
+        {
+            auto& alarms =
+                settings.get().alarms;
+
+            const std::size_t index =
+                settingsRenderer.getSelectedAlarm();
+
+            if (index < alarms.size())
+            {
+                AlarmConfig& alarm =
+                    alarms[index];
+
+                const bool isPM =
+                    alarm.hour >= 12;
+
+                int displayHour =
+                    alarm.hour % 12;
+
+                if (displayHour == 0)
+                    displayHour = 12;
+
+                displayHour++;
+
+                if (displayHour > 12)
+                    displayHour = 1;
+
+                if (isPM)
+                {
+                    alarm.hour =
+                        displayHour == 12
+                            ? 12
+                            : displayHour + 12;
+                }
+                else
+                {
+                    alarm.hour =
+                        displayHour == 12
+                            ? 0
+                            : displayHour;
+                }
+            }
+
+            settings.save(SETTINGS_PATH);
+
+            break;
+        }
+
+        case SettingsAction::ToggleAlarmAmPm:
+        {
+            auto& alarms =
+                settings.get().alarms;
+
+            const std::size_t index =
+                settingsRenderer.getSelectedAlarm();
+
+            if (index < alarms.size())
+            {
+                AlarmConfig& alarm =
+                    alarms[index];
+
+                if (alarm.hour >= 12)
+                {
+                    // PM -> AM
+                    alarm.hour -= 12;
+                }
+                else
+                {
+                    // AM -> PM
+                    alarm.hour += 12;
+                }
+            }
+
+            settings.save(SETTINGS_PATH);
+
+            break;
+        }
+
+        case SettingsAction::AdjustAlarmMinute:
+        {
+            auto& alarms =
+                settings.get().alarms;
+
+            const std::size_t index =
+                settingsRenderer.getSelectedAlarm();
+
+            if (index < alarms.size())
+            {
+                alarms[index].minute =
+                    (alarms[index].minute + 5) % 60;
+            }
+
+            settings.save(SETTINGS_PATH);
+
+            break;
+        }
+
+        case SettingsAction::ToggleAlarmDay:
+        {
+            auto& alarms =
+                settings.get().alarms;
+
+            const std::size_t alarmIndex =
+                settingsRenderer.getSelectedAlarm();
+
+            const int day =
+                settingsRenderer.getSelectedDay();
+
+            if (alarmIndex < alarms.size() &&
+                day >= 0 &&
+                day < 7)
+            {
+                alarms[alarmIndex]
+                    .repeatDays[day] =
+                    !alarms[alarmIndex]
+                        .repeatDays[day];
+            }
+
+            settings.save(SETTINGS_PATH);
+
+            break;
+        }
+
+        case SettingsAction::ToggleAlarmAnimation:
+        {
+            auto& alarms =
+                settings.get().alarms;
+
+            const std::size_t index =
+                settingsRenderer.getSelectedAlarm();
+
+            if (index < alarms.size())
+            {
+                alarms[index].showAnimation =
+                    !alarms[index].showAnimation;
+            }
+
+            settings.save(SETTINGS_PATH);
+
+            break;
+        }
+
+        case SettingsAction::SelectAlarmSound:
+        {
+            /*
+            * Renderer has already entered the
+            * alarm sound selection screen.
+            */
+            break;
+        }
+
+        case SettingsAction::SelectAlarmSoundItem:
+        {
+            auto& alarms =
+                settings.get().alarms;
+
+            const std::size_t index =
+                settingsRenderer.getSelectedAlarm();
+
+            if (index < alarms.size())
+            {
+                alarms[index].soundPath =
+                    settingsRenderer.getSelectedAlarmSound();
+            }
+
+            settingsRenderer.finishAlarmSoundSelection();
+
+            settings.save(SETTINGS_PATH);
+
+            break;
+        }
+
+        case SettingsAction::DeleteAlarm:
+        {
+            auto& alarms =
+                settings.get().alarms;
+
+            const std::size_t index =
+                settingsRenderer.getSelectedAlarm();
+
+            if (index < alarms.size())
+            {
+                alarms.erase(
+                    alarms.begin() + index);
+
+                settings.save(SETTINGS_PATH);
+            }
+
+            break;
+        }
+
+        case SettingsAction::AlarmBack:
+            break;
+
+        case SettingsAction::Back:
+            currentMode = AppMode::Clock;
+            break;
+
+        case SettingsAction::None:
+        default:
+            break;
+    }
+}
+}
+
 // ============================================================
 // Main
 // ============================================================
@@ -460,6 +839,42 @@ int main(int argc, char* argv[])
     {
         Settings settings;
 
+        const std::string SETTINGS_PATH =
+            "../assets/settings/settings.json";
+
+        if (settings.load(SETTINGS_PATH))
+        {
+            SDL_Log(
+                "Settings loaded from %s",
+                SETTINGS_PATH.c_str());
+        }
+        else
+        {
+            SDL_Log(
+                "No saved settings found. Using defaults.");
+
+            /*
+            * Create the initial settings file.
+            */
+            settings.save(SETTINGS_PATH);
+        }
+
+        // ========================================================
+        // Settings renderer
+        // ========================================================
+
+        SettingsRenderer settingsRenderer;
+
+        if (!settingsRenderer.initialize(
+                renderer,
+                FONT_PATH))
+        {
+            SDL_Log(
+                "Failed to initialize SettingsRenderer");
+
+            return 1;
+        }
+
         // ========================================================
         // Music manager
         // ========================================================
@@ -503,6 +918,13 @@ int main(int argc, char* argv[])
         AppMode currentMode = AppMode::Clock;
 
         bool running = true;
+
+        // ====================================================
+        // Alarm state
+        // ====================================================
+
+        int lastAlarmDay = -1;
+        int lastAlarmMinute = -1;
 
         // Pochacco breathing animation.
         float pochaccoAnimationTime = 0.0f;
@@ -569,6 +991,10 @@ int main(int argc, char* argv[])
                         {
                             currentMode = AppMode::Clock;
                         }
+                        else if (event.key.key == SDLK_S)
+                        {
+                            currentMode = AppMode::Settings;
+                        }
                         else if (currentMode == AppMode::Music &&
                                 event.key.key == SDLK_SPACE)
                         {
@@ -600,9 +1026,40 @@ int main(int argc, char* argv[])
                                     &MUSIC_BOX_BUTTON_BOUNDS))
                             {
                                 musicManager.toggleMusicBox(
-                                    settings.get().music.songPath
-                                );
+                                    settings.get().music.songPath);
                             }
+                        }
+                        else if (currentMode == AppMode::Settings)
+                        {
+                            const SettingsAction action =
+                                settingsRenderer.getAction(
+                                    event.button.x,
+                                    event.button.y,
+                                    SDL_FRect{
+                                        0.0f,
+                                        0.0f,
+                                        static_cast<float>(LOGICAL_WIDTH),
+                                        static_cast<float>(LOGICAL_HEIGHT)
+                                    },
+                                    settings);
+
+                            handleSettingsAction(
+                                action,
+                                settings,
+                                settingsRenderer,
+                                musicManager,
+                                currentMode);
+                        }
+
+                        break;
+                    }
+
+                    case SDL_EVENT_MOUSE_WHEEL:
+                    {
+                        if (currentMode == AppMode::Settings)
+                        {
+                            settingsRenderer.scrollAlarms(
+                                -event.wheel.y * 35.0f);
                         }
 
                         break;
@@ -687,9 +1144,31 @@ int main(int argc, char* argv[])
                                     &MUSIC_BOX_BUTTON_BOUNDS))
                             {
                                 musicManager.toggleMusicBox(
-                                    settings.get().music.songPath
-                                );
+                                    settings.get().music.songPath);
                             }
+                        }
+                        else if (currentMode == AppMode::Settings)
+                        {
+                            const SDL_FRect settingsBounds{
+                                0.0f,
+                                0.0f,
+                                static_cast<float>(LOGICAL_WIDTH),
+                                static_cast<float>(LOGICAL_HEIGHT)
+                            };
+
+                            const SettingsAction action =
+                                settingsRenderer.getAction(
+                                    touchEndX,
+                                    touchEndY,
+                                    settingsBounds,
+                                    settings);
+
+                            handleSettingsAction(
+                                action,
+                                settings,
+                                settingsRenderer,
+                                musicManager,
+                                currentMode);
                         }
 
                         break;
@@ -760,23 +1239,103 @@ int main(int argc, char* argv[])
             };
 
             // ------------------------------------------------
+            // Check alarms
+            // ------------------------------------------------
+
+            const int currentDay =
+                localTime.tm_yday;
+
+            const int currentMinute =
+                currentTime.hour * 60 +
+                currentTime.minute;
+
+            /*
+            * Only evaluate alarms once per minute.
+            *
+            * tm_yday is used instead of tm_wday because it
+            * uniquely identifies the day within the year.
+            */
+            if (currentDay != lastAlarmDay ||
+                currentMinute != lastAlarmMinute)
+            {
+                for (AlarmConfig& alarm :
+                    settings.get().alarms)
+                {
+                    if (!alarm.enabled)
+                        continue;
+
+                    if (alarm.hour != currentTime.hour ||
+                        alarm.minute != currentTime.minute)
+                    {
+                        continue;
+                    }
+
+                    /*
+                    * tm_wday:
+                    *
+                    * Sunday    = 0
+                    * Monday    = 1
+                    * ...
+                    * Saturday  = 6
+                    */
+                    const int weekday =
+                        localTime.tm_wday;
+
+                    if (!alarm.repeatDays[weekday])
+                        continue;
+
+                    SDL_Log(
+                        "Alarm triggered: %02d:%02d",
+                        alarm.hour,
+                        alarm.minute);
+
+                    // --------------------------------------------
+                    // Alarm animation
+                    // --------------------------------------------
+
+                    if (alarm.showAnimation)
+                    {
+                        clockManager
+                            .getAnimationManager()
+                            .showAnimation(0);
+                    }
+
+                    // --------------------------------------------
+                    // Alarm sound
+                    // --------------------------------------------
+
+                    if (alarm.playMusic)
+                    {
+                        musicManager.playSound(
+                            alarm.soundPath);
+                    }
+                }
+
+                lastAlarmDay = currentDay;
+                lastAlarmMinute = currentMinute;
+            }
+
+            // ------------------------------------------------
             // Update
             // ------------------------------------------------
 
             switch (currentMode)
             {
                 case AppMode::Clock:
-                    clockManager.update(deltaTime, settings.get(), currentTime);
+                    clockManager.update(
+                        deltaTime,
+                        settings.get(),
+                        currentTime);
                     break;
 
                 case AppMode::Music:
-                    musicManager.update();
+                    break;
+
+                case AppMode::Settings:
                     break;
             }
-            
-            // Music playback must update regardless
-            // of which screen is currently displayed.
-            musicManager.update();
+
+            musicManager.update(deltaTime);
 
             pochaccoAnimationTime +=
                 deltaTime;
@@ -919,6 +1478,22 @@ int main(int argc, char* argv[])
                     musicManager.render(
                         renderer,
                         MUSIC_BOUNDS);
+                    break;
+
+                // =================================================
+                // Settings
+                // =================================================
+                case AppMode::Settings:
+                    settingsRenderer.render(
+                        renderer,
+                        SDL_FRect{
+                            0.0f,
+                            0.0f,
+                            static_cast<float>(LOGICAL_WIDTH),
+                            static_cast<float>(LOGICAL_HEIGHT)
+                        },
+                        settings);
+
                     break;
             }
 
