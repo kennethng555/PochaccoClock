@@ -7,16 +7,15 @@ ClockManager::ClockManager(
       digitalRenderer_(
           std::make_unique<DigitalClockRenderer>(
               renderer,
-              fontPath
-          )
-      ),
+              fontPath)),
       elapsedTime_(0.0f)
 {
 }
 
 ClockManager::~ClockManager() = default;
 
-bool ClockManager::initialize()
+bool ClockManager::initialize(
+    const ClockSettings& settings)
 {
     if (!digitalRenderer_)
     {
@@ -29,30 +28,31 @@ bool ClockManager::initialize()
     }
 
     /*
-     * Initialize the decorative animations.
-     *
-     * Failure to load animations does not prevent
-     * the clock itself from working.
+     * Animations are decorative, so failure to load
+     * them should not prevent the clock from starting.
      */
-    if (!animationManager_.initialize(renderer_))
+    if (!animationManager_.initialize(
+            renderer_,
+            settings))
     {
         SDL_Log(
-            "ClockManager: no animations could be loaded");
+            "ClockManager: no animations loaded");
     }
 
     return true;
 }
 
 void ClockManager::update(
-    float deltaTime)
+    float deltaTime,
+    const ClockSettings& settings,
+    const ClockTime& time)
 {
     elapsedTime_ += deltaTime;
 
-    /*
-     * Update the animation scheduler and
-     * currently active animation.
-     */
-    animationManager_.update(deltaTime);
+    animationManager_.update(
+        deltaTime,
+        settings,
+        time);
 }
 
 void ClockManager::render(
@@ -65,19 +65,16 @@ void ClockManager::render(
         return;
     }
 
-    /*
-     * Render the normal clock.
-     */
     digitalRenderer_->render(
         time,
         bounds,
-        timeOfDay
-    );
+        timeOfDay);
 
-    /*
-     * Render the currently active decorative
-     * animation, if there is one.
-     */
     animationManager_.render(
         renderer_);
+}
+
+AnimationManager& ClockManager::getAnimationManager()
+{
+    return animationManager_;
 }

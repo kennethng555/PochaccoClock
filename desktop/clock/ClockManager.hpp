@@ -1,8 +1,8 @@
-#ifndef CLOCK_MANAGER_HPP
-#define CLOCK_MANAGER_HPP
+#pragma once
 
 #include "DigitalClockRenderer.hpp"
 #include "../animation/AnimationManager.hpp"
+#include "../settings/Settings.hpp"
 
 #include <SDL3/SDL.h>
 
@@ -18,14 +18,20 @@ public:
 
     ~ClockManager();
 
-    bool initialize();
+    bool initialize(
+        const ClockSettings& settings);
 
-    void update(float deltaTime);
+    void update(
+        float deltaTime,
+        const ClockSettings& settings,
+        const ClockTime& time);
 
     void render(
         const ClockTime& time,
         const SDL_FRect& bounds,
         TimeOfDay timeOfDay);
+
+    AnimationManager& getAnimationManager();
 
 private:
     SDL_Renderer* renderer_;
@@ -37,5 +43,3 @@ private:
 
     float elapsedTime_;
 };
-
-#endif

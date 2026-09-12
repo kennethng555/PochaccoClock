@@ -34,8 +34,12 @@ public:
     void seek(float time);
 
     bool isPlaying() const;
-
     bool isLoaded() const;
+    bool isLooping() const;
+    void toggleLooping();
+
+    bool isShuffling() const;
+    void toggleShuffling();
 
     const float* getSamples() const;
     size_t getSampleCount() const;
@@ -80,6 +84,8 @@ private:
 
     bool loaded = false;
     bool playing = false;
+    bool looping = false;
+    bool shuffling = false;
 
     float currentTime = 0.0f;
     float duration = 0.0f;
@@ -95,6 +101,11 @@ private:
 
     std::vector<std::string> musicFiles;
     size_t currentTrackIndex = 0;
+
+    std::vector<std::size_t> shuffledTracks;
+    std::size_t shufflePosition = 0;
+
+    void createShuffleOrder();
 
     bool loadCurrentTrack();
 };

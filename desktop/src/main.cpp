@@ -58,6 +58,38 @@ constexpr SDL_FRect CLOCK_BOUNDS = {
     230.0f
 };
 
+// ============================================================
+// Music Box button
+// ============================================================
+
+constexpr SDL_FRect MUSIC_BOX_BUTTON_BOUNDS = {
+    35.0f,
+    365.0f,
+    145.0f,
+    48.0f
+};
+
+constexpr SDL_Color MUSIC_BOX_BUTTON_COLOR = {
+    184,
+    220,
+    180,
+    255
+};
+
+constexpr SDL_Color MUSIC_BOX_BUTTON_ACTIVE_COLOR = {
+    145,
+    195,
+    150,
+    255
+};
+
+constexpr SDL_Color MUSIC_BOX_TEXT_COLOR = {
+    50,
+    80,
+    55,
+    255
+};
+
 // Pochacco + bed: bottom-right.
 constexpr SDL_FRect POCHACCO_BOUNDS = {
     LOGICAL_WIDTH - POCHACCO_WIDTH + 65.0f,
@@ -142,6 +174,90 @@ SDL_Texture* getBackgroundTexture(
 }
 
 // ============================================================
+// Draw Music Box button
+// ============================================================
+
+void drawMusicBoxButton(
+    SDL_Renderer* renderer,
+    TTF_Font* font,
+    bool playing)
+{
+    if (!renderer || !font)
+        return;
+
+    SDL_Color buttonColor =
+        playing
+            ? MUSIC_BOX_BUTTON_ACTIVE_COLOR
+            : MUSIC_BOX_BUTTON_COLOR;
+
+    // Button background
+    SDL_SetRenderDrawColor(
+        renderer,
+        buttonColor.r,
+        buttonColor.g,
+        buttonColor.b,
+        buttonColor.a
+    );
+
+    SDL_RenderFillRect(
+        renderer,
+        &MUSIC_BOX_BUTTON_BOUNDS
+    );
+
+    // Button text
+    const char* text =
+        playing
+            ? "Music Box: ON"
+            : "Music Box";
+
+    SDL_Surface* surface =
+        TTF_RenderText_Blended(
+            font,
+            text,
+            0,
+            MUSIC_BOX_TEXT_COLOR
+        );
+
+    if (!surface)
+        return;
+
+    SDL_Texture* texture =
+        SDL_CreateTextureFromSurface(
+            renderer,
+            surface
+        );
+
+    if (!texture)
+    {
+        SDL_DestroySurface(surface);
+        return;
+    }
+
+    SDL_FRect textBounds{
+        MUSIC_BOX_BUTTON_BOUNDS.x +
+            (MUSIC_BOX_BUTTON_BOUNDS.w -
+             static_cast<float>(surface->w)) / 2.0f,
+
+        MUSIC_BOX_BUTTON_BOUNDS.y +
+            (MUSIC_BOX_BUTTON_BOUNDS.h -
+             static_cast<float>(surface->h)) / 2.0f,
+
+        static_cast<float>(surface->w),
+        static_cast<float>(surface->h)
+    };
+
+    SDL_RenderTexture(
+        renderer,
+        texture,
+        nullptr,
+        &textBounds
+    );
+
+    SDL_DestroyTexture(texture);
+    SDL_DestroySurface(surface);
+}
+
+// ============================================================
 // Main
 // ============================================================
 
@@ -178,6 +294,25 @@ int main(int argc, char* argv[])
             << SDL_GetError()
             << '\n';
 
+        display.shutdown();
+
+        return 1;
+    }
+
+    TTF_Font* musicBoxFont =
+    TTF_OpenFont(
+        FONT_PATH,
+        20.0f
+    );
+
+    if (!musicBoxFont)
+    {
+        std::cerr
+            << "Failed to load Music Box font: "
+            << SDL_GetError()
+            << '\n';
+
+        TTF_Quit();
         display.shutdown();
 
         return 1;
@@ -323,6 +458,7 @@ int main(int argc, char* argv[])
     // ========================================================
 
     {
+        Settings settings;
 
         // ========================================================
         // Music manager
@@ -344,11 +480,9 @@ int main(int argc, char* argv[])
             FONT_PATH
         );
 
-        if (!clockManager.initialize()) {
+        if (!clockManager.initialize(settings.get())) {
 
-            std::cerr
-                << "ClockManager initialization failed."
-                << '\n';
+            std::cerr << "ClockManager initialization failed." << '\n';
 
             SDL_DestroyTexture(nightTexture);
             SDL_DestroyTexture(eveningTexture);
@@ -454,6 +588,22 @@ int main(int argc, char* argv[])
                                 event.button.y,
                                 MUSIC_BOUNDS);
                         }
+                        else if (currentMode == AppMode::Clock)
+                        {
+                            const SDL_FPoint point{
+                                event.button.x,
+                                event.button.y
+                            };
+
+                            if (SDL_PointInRectFloat(
+                                    &point,
+                                    &MUSIC_BOX_BUTTON_BOUNDS))
+                            {
+                                musicManager.toggleMusicBox(
+                                    settings.get().music.songPath
+                                );
+                            }
+                        }
 
                         break;
                     }
@@ -525,29 +675,27 @@ int main(int argc, char* argv[])
                                 touchEndY,
                                 MUSIC_BOUNDS);
                         }
+                        else if (currentMode == AppMode::Clock)
+                        {
+                            const SDL_FPoint point{
+                                touchEndX,
+                                touchEndY
+                            };
+
+                            if (SDL_PointInRectFloat(
+                                    &point,
+                                    &MUSIC_BOX_BUTTON_BOUNDS))
+                            {
+                                musicManager.toggleMusicBox(
+                                    settings.get().music.songPath
+                                );
+                            }
+                        }
 
                         break;
                     }
                 }
             }
-
-            // ------------------------------------------------
-            // Update
-            // ------------------------------------------------
-
-            switch (currentMode)
-            {
-                case AppMode::Clock:
-                    clockManager.update(deltaTime);
-                    break;
-
-                case AppMode::Music:
-                    musicManager.update();
-                    break;
-            }
-
-            pochaccoAnimationTime +=
-                deltaTime;
 
             // ------------------------------------------------
             // Get current local time
@@ -610,6 +758,28 @@ int main(int argc, char* argv[])
 
                 fractionalSecond
             };
+
+            // ------------------------------------------------
+            // Update
+            // ------------------------------------------------
+
+            switch (currentMode)
+            {
+                case AppMode::Clock:
+                    clockManager.update(deltaTime, settings.get(), currentTime);
+                    break;
+
+                case AppMode::Music:
+                    musicManager.update();
+                    break;
+            }
+            
+            // Music playback must update regardless
+            // of which screen is currently displayed.
+            musicManager.update();
+
+            pochaccoAnimationTime +=
+                deltaTime;
 
             // ------------------------------------------------
             // Determine time of day
@@ -734,6 +904,12 @@ int main(int argc, char* argv[])
                         currentTime,
                         CLOCK_BOUNDS,
                         timeOfDay);
+                    drawMusicBoxButton(
+                        renderer,
+                        musicBoxFont,
+                        musicManager.isMusicBoxPlaying()
+                    );
+
                     break;
                 
                 // =================================================
@@ -763,6 +939,7 @@ int main(int argc, char* argv[])
     SDL_DestroyTexture(daytimeTexture);
     SDL_DestroyTexture(morningTexture);
     SDL_DestroyTexture(pochaccoTexture);
+    TTF_CloseFont(musicBoxFont);
 
     TTF_Quit();
 

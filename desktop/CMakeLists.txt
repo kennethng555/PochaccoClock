@@ -61,6 +61,7 @@ add_executable(PochaccoClock
     music/MusicRenderer.cpp
     music/MusicManager.cpp
     music/MusicPlayer.cpp
+    settings/Settings.cpp
 
     ../shared/Clock.cpp
 )

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include <SDL3/SDL.h>
 
 #include "MusicRenderer.hpp"
@@ -32,8 +33,22 @@ public:
 
     bool isInitialized() const;
 
+    MusicPlayer& getMusicPlayer();
+    const MusicPlayer& getMusicPlayer() const;
+
+    void toggleMusicBox(
+        const std::string& songPath);
+
+    void stopMusicBox();
+
+    bool isMusicBoxPlaying() const;
+
 private:
     MusicRenderer renderer;
 
+    MusicPlayer musicBoxPlayer;
+
     bool initialized = false;
+
+    bool musicBoxPlaying = false;
 };

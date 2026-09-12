@@ -1,51 +1,46 @@
-#ifndef ANIMATION_MANAGER_HPP
-#define ANIMATION_MANAGER_HPP
+#pragma once
 
 #include "AnimatedImage.hpp"
+#include "../settings/Settings.hpp"
+#include "../clock/ClockTime.hpp"
 
 #include <SDL3/SDL.h>
 
 #include <array>
 #include <cstddef>
 #include <random>
-#include <string>
 
 class AnimationManager
 {
 public:
-    static constexpr std::size_t ANIMATION_COUNT = 4;
+    static constexpr std::size_t ANIMATION_COUNT = 1;
 
     AnimationManager();
 
-    ~AnimationManager() = default;
+    bool initialize(
+        SDL_Renderer* renderer,
+        const ClockSettings& settings);
 
-    AnimationManager(const AnimationManager&) = delete;
-    AnimationManager& operator=(const AnimationManager&) = delete;
+    void update(
+        float deltaTime,
+        const ClockSettings& settings,
+        const ClockTime& time);
 
-    bool initialize(SDL_Renderer* renderer);
+    void render(
+        SDL_Renderer* renderer);
 
-    void update(float deltaTime);
+    void showAnimation(
+        std::size_t animationIndex);
 
-    void render(SDL_Renderer* renderer);
-
-    /*
-     * Immediately show a specific animation.
-     *
-     * animationIndex must be 0-3.
-     */
-    void showAnimation(std::size_t animationIndex);
-
-    /*
-     * Hide the currently active animation.
-     */
     void hideAnimation();
 
-    /*
-     * Enable/disable automatic random appearances.
-     */
-    void setRandomAppearancesEnabled(bool enabled);
-
     bool isActive() const;
+
+    std::size_t getCurrentAnimation() const;
+
+    bool checkScheduledAnimations(
+        const ClockSettings& settings,
+        const ClockTime& time);
 
 private:
     struct Animation
@@ -62,55 +57,31 @@ private:
         bool loaded = false;
     };
 
-    std::array<Animation, ANIMATION_COUNT> animations_;
+    std::array<Animation, ANIMATION_COUNT>
+        animations_;
 
-    std::size_t currentAnimation_;
+    std::size_t currentAnimation_ = 0;
 
-    bool active_;
+    bool active_ = false;
 
-    bool randomAppearancesEnabled_;
+    float displayTimer_ = 0.0f;
 
-    /*
-     * How long the currently selected animation
-     * remains visible.
-     */
-    float displayTimer_;
-
-    /*
-     * Time remaining before another random animation
-     * can appear.
-     */
-    float cooldownTimer_;
-
-    /*
-     * Time remaining until the next random appearance.
-     */
-    float nextAppearanceTimer_;
-
-    /*
-     * How long an animation stays visible.
-     */
-    static constexpr float DISPLAY_DURATION = 30.0f;
-
-    /*
-     * Minimum time between animations.
-     */
-    static constexpr float MIN_COOLDOWN = 60.0f;
-
-    /*
-     * Maximum time between animations.
-     */
-    static constexpr float MAX_COOLDOWN = 180.0f;
+    float nextAppearanceTimer_ = 30.0f;
 
     std::mt19937 randomEngine_;
 
-    float randomFloat(float minimum, float maximum);
+    float randomFloat(
+        float minimum,
+        float maximum);
 
-    std::size_t randomAnimationIndex();
+    std::size_t randomAnimationIndex(
+        const ClockSettings& settings);
 
-    void startRandomAnimation();
+    void startRandomAnimation(
+        const ClockSettings& settings);
 
     void resetAppearanceTimer();
-};
 
-#endif
+    int lastCheckedHour_ = -1;
+    int lastCheckedMinute_ = -1;
+};

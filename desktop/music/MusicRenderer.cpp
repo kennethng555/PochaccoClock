@@ -16,9 +16,10 @@ namespace
     constexpr float PROGRESS_HEIGHT = 45.0f;
     constexpr float CONTROLS_HEIGHT = 75.0f;
     constexpr float PROGRESS_BAR_HEIGHT = 7.0f;
-    constexpr float CONTROL_SPACING = 78.0f;
+    constexpr float CONTROL_SPACING = 62.0f;
     constexpr float PLAY_BUTTON_RADIUS = 27.0f;
     constexpr float SIDE_BUTTON_SIZE = 52.0f;
+
     constexpr float MUSIC_PANEL_X = 0.0f;
     constexpr float MUSIC_PANEL_Y = 0.0f;
     constexpr float MUSIC_PANEL_WIDTH = 560.0f;
@@ -52,13 +53,6 @@ namespace
 
 MusicRenderer::~MusicRenderer()
 {
-    /*
-     * Fonts must be destroyed while SDL_ttf is still active.
-     *
-     * MusicRenderer itself is scoped inside main(), so this
-     * destructor executes before TTF_Quit().
-     */
-
     if (titleFont != nullptr)
     {
         TTF_CloseFont(titleFont);
@@ -93,10 +87,6 @@ bool MusicRenderer::initialize(
         return false;
 
     renderer = sdlRenderer;
-
-    /*
-     * Load fonts.
-     */
 
     titleFont =
         TTF_OpenFont(
@@ -140,10 +130,6 @@ bool MusicRenderer::initialize(
         return false;
     }
 
-    /*
-     * Initialize the music player.
-     */
-
     if (!musicPlayer.initialize())
     {
         SDL_Log(
@@ -152,12 +138,6 @@ bool MusicRenderer::initialize(
         return false;
     }
 
-    /*
-     * Temporary desktop track.
-     *
-     * This will eventually become the selected MP3/music
-     * source when the audio backend is expanded.
-     */
     if (!musicPlayer.loadDirectory("../assets/music"))
     {
         SDL_Log(
@@ -165,8 +145,6 @@ bool MusicRenderer::initialize(
 
         return false;
     }
-
-    musicPlayer.play();
 
     initialized = true;
 
@@ -182,22 +160,10 @@ void MusicRenderer::update()
     if (!initialized)
         return;
 
-    /*
-     * Update actual audio playback.
-     */
     musicPlayer.update();
 
-    /*
-     * Advance UI animation.
-     *
-     * This doesn't depend on audio playback.
-     */
     animationTime +=
         1.0f / 60.0f;
-
-    /*
-     * Feed PCM samples to the spectrum analyzer.
-     */
 
     const float* samples =
         musicPlayer.getSamples();
@@ -211,13 +177,6 @@ void MusicRenderer::update()
         return;
     }
 
-    /*
-     * Determine the current sample position.
-     *
-     * The current implementation assumes 44.1 kHz.
-     * The MusicPlayer abstraction can expose the actual
-     * sample rate later when the MP3 backend is added.
-     */
     constexpr float SAMPLE_RATE = 44100.0f;
 
     const std::size_t currentSample =
@@ -246,7 +205,7 @@ void MusicRenderer::update()
 }
 
 // ============================================================
-// Main render
+// Main Render
 // ============================================================
 
 void MusicRenderer::render(
@@ -256,21 +215,6 @@ void MusicRenderer::render(
     if (!initialized)
         return;
 
-    if (sdlRenderer == nullptr)
-        return;
-
-
-    // ========================================================
-    // Translucent music panel
-    // ========================================================
-
-    SDL_FRect panelBounds{
-        bounds.x + MUSIC_PANEL_X,
-        bounds.y + MUSIC_PANEL_Y,
-        MUSIC_PANEL_WIDTH,
-        MUSIC_PANEL_HEIGHT
-    };
-
     SDL_SetRenderDrawBlendMode(
         sdlRenderer,
         SDL_BLENDMODE_BLEND);
@@ -278,20 +222,13 @@ void MusicRenderer::render(
     SDL_SetRenderDrawColor(
         sdlRenderer,
         255,
-        252,
-        240,
-        205);
+        255,
+        255,
+        220);
 
     SDL_RenderFillRect(
         sdlRenderer,
-        &panelBounds);
-
-    /*
-     * Divide the music area vertically.
-     */
-
-    float y =
-        bounds.y;
+        &bounds);
 
     // --------------------------------------------------------
     // Spectrum
@@ -299,7 +236,7 @@ void MusicRenderer::render(
 
     SDL_FRect spectrumBounds{
         bounds.x,
-        y,
+        bounds.y,
         bounds.w,
         SPECTRUM_HEIGHT
     };
@@ -308,15 +245,17 @@ void MusicRenderer::render(
         sdlRenderer,
         spectrumBounds);
 
-    y += SPECTRUM_HEIGHT;
-
     // --------------------------------------------------------
     // Song information
     // --------------------------------------------------------
 
+    float currentY =
+        bounds.y +
+        SPECTRUM_HEIGHT;
+
     SDL_FRect songInfoBounds{
         bounds.x,
-        y,
+        currentY,
         bounds.w,
         SONG_INFO_HEIGHT
     };
@@ -325,15 +264,16 @@ void MusicRenderer::render(
         sdlRenderer,
         songInfoBounds);
 
-    y += SONG_INFO_HEIGHT;
-
     // --------------------------------------------------------
     // Progress
     // --------------------------------------------------------
 
+    currentY +=
+        SONG_INFO_HEIGHT;
+
     SDL_FRect progressBounds{
         bounds.x,
-        y,
+        currentY,
         bounds.w,
         PROGRESS_HEIGHT
     };
@@ -342,15 +282,16 @@ void MusicRenderer::render(
         sdlRenderer,
         progressBounds);
 
-    y += PROGRESS_HEIGHT;
-
     // --------------------------------------------------------
     // Controls
     // --------------------------------------------------------
 
+    currentY +=
+        PROGRESS_HEIGHT;
+
     SDL_FRect controlsBounds{
         bounds.x,
-        y,
+        currentY,
         bounds.w,
         CONTROLS_HEIGHT
     };
@@ -361,17 +302,13 @@ void MusicRenderer::render(
 }
 
 // ============================================================
-// Spectrum
+// Spectrum Rendering
 // ============================================================
 
 void MusicRenderer::renderSpectrum(
     SDL_Renderer* sdlRenderer,
     const SDL_FRect& bounds)
 {
-    /*
-     * Give the spectrum some internal padding.
-     */
-
     constexpr float PADDING_X = 10.0f;
     constexpr float PADDING_Y = 10.0f;
 
@@ -382,26 +319,19 @@ void MusicRenderer::renderSpectrum(
         bounds.h - PADDING_Y * 2.0f
     };
 
-    /*
-     * Let SpectrumAnalyzer render its bars.
-     */
     spectrumAnalyzer.render(
         sdlRenderer,
         analyzerBounds);
 }
 
 // ============================================================
-// Song information
+// Song Information
 // ============================================================
 
 void MusicRenderer::renderSongInfo(
     SDL_Renderer* sdlRenderer,
     const SDL_FRect& bounds)
 {
-    /*
-     * Left align title and artist.
-     */
-
     constexpr float LEFT_PADDING = 10.0f;
 
     const char* title =
@@ -432,7 +362,7 @@ void MusicRenderer::renderSongInfo(
 }
 
 // ============================================================
-// Progress bar
+// Progress Bar
 // ============================================================
 
 void MusicRenderer::renderProgressBar(
@@ -462,10 +392,6 @@ void MusicRenderer::renderProgressBar(
 
     constexpr float TIME_WIDTH = 45.0f;
 
-    /*
-     * Current time.
-     */
-
     renderText(
         sdlRenderer,
         formatTime(currentTime),
@@ -473,10 +399,6 @@ void MusicRenderer::renderProgressBar(
         timeColor,
         bounds.x,
         bounds.y + 1.0f);
-
-    /*
-     * Duration.
-     */
 
     const std::string durationText =
         formatTime(duration);
@@ -501,20 +423,12 @@ void MusicRenderer::renderProgressBar(
             static_cast<float>(durationTextWidth),
         bounds.y + 1.0f);
 
-    /*
-     * Progress bar sits between the time labels.
-     */
-
     SDL_FRect barBounds{
         bounds.x + TIME_WIDTH,
         bounds.y + 10.0f,
         bounds.w - TIME_WIDTH * 2.0f,
         PROGRESS_BAR_HEIGHT
     };
-
-    /*
-     * Track.
-     */
 
     SDL_SetRenderDrawColor(
         sdlRenderer,
@@ -526,10 +440,6 @@ void MusicRenderer::renderProgressBar(
     SDL_RenderFillRect(
         sdlRenderer,
         &barBounds);
-
-    /*
-     * Played portion.
-     */
 
     SDL_FRect playedBounds =
         barBounds;
@@ -548,11 +458,7 @@ void MusicRenderer::renderProgressBar(
         sdlRenderer,
         &playedBounds);
 
-    /*
-     * Position indicator.
-     */
-
-    const float knobRadius = 5.0f;
+    constexpr float knobRadius = 5.0f;
 
     const float knobX =
         barBounds.x +
@@ -597,162 +503,163 @@ void MusicRenderer::renderControls(
         bounds.y +
         bounds.h / 2.0f;
 
-    /*
-     * Previous
-     */
+    renderLoopButton(
+        sdlRenderer,
+        centerX - CONTROL_SPACING * 2.0f,
+        centerY);
 
     renderPreviousButton(
         sdlRenderer,
         centerX - CONTROL_SPACING,
         centerY);
 
-    /*
-     * Play / pause
-     */
-
     renderPlayButton(
         sdlRenderer,
         centerX,
         centerY);
 
-    /*
-     * Next
-     */
-
     renderNextButton(
         sdlRenderer,
         centerX + CONTROL_SPACING,
         centerY);
+
+    renderShuffleButton(
+        sdlRenderer,
+        centerX + CONTROL_SPACING * 2.0f,
+        centerY);
 }
 
 // ============================================================
-// Play / pause button
+// Active Button Circle
 // ============================================================
 
-void MusicRenderer::renderPlayButton(
-    SDL_Renderer* renderer,
+void MusicRenderer::renderActiveButtonCircle(
+    SDL_Renderer* sdlRenderer,
     float centerX,
     float centerY)
 {
-    if (renderer == nullptr)
-        return;
-
-    constexpr float RADIUS = 27.0f;
+    constexpr float radius = 27.0f;
 
     SDL_SetRenderDrawColor(
-        renderer,
+        sdlRenderer,
         170,
         220,
-        170,
+        180,
         255);
 
-    /*
-     * Draw a fixed-size circular play button.
-     */
-    for (int y = -static_cast<int>(RADIUS);
-         y <= static_cast<int>(RADIUS);
+    for (float y = -radius;
+         y <= radius;
          ++y)
     {
-        for (int x = -static_cast<int>(RADIUS);
-             x <= static_cast<int>(RADIUS);
-             ++x)
-        {
-            if (x * x + y * y <=
-                RADIUS * RADIUS)
-            {
-                SDL_RenderPoint(
-                    renderer,
-                    centerX + static_cast<float>(x),
-                    centerY + static_cast<float>(y));
-            }
-        }
-    }
+        const float width =
+            SDL_sqrtf(
+                radius * radius -
+                y * y);
 
-    /*
-     * Fixed play/pause icon.
-     *
-     * Play = right-facing triangle
-     * Pause = two vertical bars
-     */
-    SDL_SetRenderDrawColor(
-        renderer,
-        0,
-        0,
-        0,
-        255);
-
-    if (musicPlayer.isPlaying())
-    {
-        constexpr float BAR_WIDTH = 6.0f;
-        constexpr float BAR_HEIGHT = 20.0f;
-        constexpr float BAR_GAP = 5.0f;
-
-        SDL_FRect leftBar{
-            centerX - BAR_GAP / 2.0f - BAR_WIDTH,
-            centerY - BAR_HEIGHT / 2.0f,
-            BAR_WIDTH,
-            BAR_HEIGHT
-        };
-
-        SDL_FRect rightBar{
-            centerX + BAR_GAP / 2.0f,
-            centerY - BAR_HEIGHT / 2.0f,
-            BAR_WIDTH,
-            BAR_HEIGHT
-        };
-
-        SDL_RenderFillRect(
-            renderer,
-            &leftBar);
-
-        SDL_RenderFillRect(
-            renderer,
-            &rightBar);
-    }
-    else
-    {
-        /*
-         * Right-facing play triangle.
-         */
-        SDL_Vertex vertices[3]{};
-
-        vertices[0].position = {
-            centerX - 7.0f,
-            centerY - 12.0f
-        };
-
-        vertices[1].position = {
-            centerX - 7.0f,
-            centerY + 12.0f
-        };
-
-        vertices[2].position = {
-            centerX + 13.0f,
-            centerY
-        };
-
-        for (auto& vertex : vertices)
-        {
-            vertex.color = {
-                0,
-                0,
-                0,
-                255
-            };
-        }
-
-        SDL_RenderGeometry(
-            renderer,
-            nullptr,
-            vertices,
-            3,
-            nullptr,
-            0);
+        SDL_RenderLine(
+            sdlRenderer,
+            centerX - width,
+            centerY + y,
+            centerX + width,
+            centerY + y);
     }
 }
 
 // ============================================================
-// Previous button
+// Loop Button
+// ============================================================
+
+void MusicRenderer::renderLoopButton(
+    SDL_Renderer* sdlRenderer,
+    float centerX,
+    float centerY)
+{
+    if (musicPlayer.isLooping())
+    {
+        renderActiveButtonCircle(
+            sdlRenderer,
+            centerX,
+            centerY);
+    }
+
+    SDL_SetRenderDrawColor(
+        sdlRenderer,
+        0,
+        0,
+        0,
+        255);
+
+    const float left =
+        centerX - 15.0f;
+
+    const float right =
+        centerX + 15.0f;
+
+    const float top =
+        centerY - 10.0f;
+
+    const float bottom =
+        centerY + 10.0f;
+
+    SDL_RenderLine(
+        sdlRenderer,
+        left,
+        top,
+        right,
+        top);
+
+    SDL_RenderLine(
+        sdlRenderer,
+        right,
+        top,
+        right,
+        bottom);
+
+    SDL_RenderLine(
+        sdlRenderer,
+        right,
+        bottom,
+        left,
+        bottom);
+
+    SDL_RenderLine(
+        sdlRenderer,
+        left,
+        bottom,
+        left,
+        top);
+
+    SDL_RenderLine(
+        sdlRenderer,
+        left,
+        top,
+        left + 6.0f,
+        top - 5.0f);
+
+    SDL_RenderLine(
+        sdlRenderer,
+        left,
+        top,
+        left + 6.0f,
+        top + 5.0f);
+
+    SDL_RenderLine(
+        sdlRenderer,
+        right,
+        bottom,
+        right - 6.0f,
+        bottom - 5.0f);
+
+    SDL_RenderLine(
+        sdlRenderer,
+        right,
+        bottom,
+        right - 6.0f,
+        bottom + 5.0f);
+}
+
+// ============================================================
+// Previous Button
 // ============================================================
 
 void MusicRenderer::renderPreviousButton(
@@ -772,13 +679,6 @@ void MusicRenderer::renderPreviousButton(
 
     constexpr float BAR_WIDTH = 4.0f;
     constexpr float BAR_HEIGHT = 22.0f;
-
-    /*
-     * Previous = |◀
-     *
-     * The bar is on the LEFT.
-     * The triangle points LEFT.
-     */
 
     SDL_FRect bar{
         centerX - 14.0f,
@@ -828,7 +728,121 @@ void MusicRenderer::renderPreviousButton(
 }
 
 // ============================================================
-// Next button
+// Play / Pause Button
+// ============================================================
+
+void MusicRenderer::renderPlayButton(
+    SDL_Renderer* sdlRenderer,
+    float centerX,
+    float centerY)
+{
+    if (sdlRenderer == nullptr)
+        return;
+
+    constexpr float RADIUS = 27.0f;
+
+    SDL_SetRenderDrawColor(
+        sdlRenderer,
+        170,
+        220,
+        170,
+        255);
+
+    for (int y = -static_cast<int>(RADIUS);
+         y <= static_cast<int>(RADIUS);
+         ++y)
+    {
+        for (int x = -static_cast<int>(RADIUS);
+             x <= static_cast<int>(RADIUS);
+             ++x)
+        {
+            if (x * x + y * y <=
+                RADIUS * RADIUS)
+            {
+                SDL_RenderPoint(
+                    sdlRenderer,
+                    centerX + static_cast<float>(x),
+                    centerY + static_cast<float>(y));
+            }
+        }
+    }
+
+    SDL_SetRenderDrawColor(
+        sdlRenderer,
+        0,
+        0,
+        0,
+        255);
+
+    if (musicPlayer.isPlaying())
+    {
+        constexpr float BAR_WIDTH = 6.0f;
+        constexpr float BAR_HEIGHT = 20.0f;
+        constexpr float BAR_GAP = 5.0f;
+
+        SDL_FRect leftBar{
+            centerX - BAR_GAP / 2.0f - BAR_WIDTH,
+            centerY - BAR_HEIGHT / 2.0f,
+            BAR_WIDTH,
+            BAR_HEIGHT
+        };
+
+        SDL_FRect rightBar{
+            centerX + BAR_GAP / 2.0f,
+            centerY - BAR_HEIGHT / 2.0f,
+            BAR_WIDTH,
+            BAR_HEIGHT
+        };
+
+        SDL_RenderFillRect(
+            sdlRenderer,
+            &leftBar);
+
+        SDL_RenderFillRect(
+            sdlRenderer,
+            &rightBar);
+    }
+    else
+    {
+        SDL_Vertex vertices[3]{};
+
+        vertices[0].position = {
+            centerX - 7.0f,
+            centerY - 12.0f
+        };
+
+        vertices[1].position = {
+            centerX - 7.0f,
+            centerY + 12.0f
+        };
+
+        vertices[2].position = {
+            centerX + 13.0f,
+            centerY
+        };
+
+        for (auto& vertex : vertices)
+        {
+            vertex.color = {
+                0,
+                0,
+                0,
+                255
+            };
+        }
+
+        SDL_RenderGeometry(
+            sdlRenderer,
+            nullptr,
+            vertices,
+            3,
+            nullptr,
+            0);
+    }
+}
+
+// ============================================================
+// Next Button
 // ============================================================
 
 void MusicRenderer::renderNextButton(
@@ -848,13 +862,6 @@ void MusicRenderer::renderNextButton(
 
     constexpr float BAR_WIDTH = 4.0f;
     constexpr float BAR_HEIGHT = 22.0f;
-
-    /*
-     * Next = ▶|
-     *
-     * The triangle points RIGHT.
-     * The bar is on the RIGHT.
-     */
 
     SDL_Vertex vertices[3]{};
 
@@ -904,7 +911,102 @@ void MusicRenderer::renderNextButton(
 }
 
 // ============================================================
-// Text rendering
+// Shuffle Button
+// ============================================================
+
+void MusicRenderer::renderShuffleButton(
+    SDL_Renderer* sdlRenderer,
+    float centerX,
+    float centerY)
+{
+    if (musicPlayer.isShuffling())
+    {
+        renderActiveButtonCircle(
+            sdlRenderer,
+            centerX,
+            centerY);
+    }
+
+    SDL_SetRenderDrawColor(
+        sdlRenderer,
+        0,
+        0,
+        0,
+        255);
+
+    SDL_RenderLine(
+        sdlRenderer,
+        centerX - 15.0f,
+        centerY - 10.0f,
+        centerX - 5.0f,
+        centerY - 10.0f);
+
+    SDL_RenderLine(
+        sdlRenderer,
+        centerX - 5.0f,
+        centerY - 10.0f,
+        centerX + 8.0f,
+        centerY + 10.0f);
+
+    SDL_RenderLine(
+        sdlRenderer,
+        centerX + 8.0f,
+        centerY + 10.0f,
+        centerX + 15.0f,
+        centerY + 10.0f);
+
+    SDL_RenderLine(
+        sdlRenderer,
+        centerX + 10.0f,
+        centerY + 6.0f,
+        centerX + 15.0f,
+        centerY + 10.0f);
+
+    SDL_RenderLine(
+        sdlRenderer,
+        centerX + 10.0f,
+        centerY + 14.0f,
+        centerX + 15.0f,
+        centerY + 10.0f);
+
+    SDL_RenderLine(
+        sdlRenderer,
+        centerX - 15.0f,
+        centerY + 10.0f,
+        centerX - 5.0f,
+        centerY + 10.0f);
+
+    SDL_RenderLine(
+        sdlRenderer,
+        centerX - 5.0f,
+        centerY + 10.0f,
+        centerX + 8.0f,
+        centerY - 10.0f);
+
+    SDL_RenderLine(
+        sdlRenderer,
+        centerX + 8.0f,
+        centerY - 10.0f,
+        centerX + 15.0f,
+        centerY - 10.0f);
+
+    SDL_RenderLine(
+        sdlRenderer,
+        centerX + 10.0f,
+        centerY - 14.0f,
+        centerX + 15.0f,
+        centerY - 10.0f);
+
+    SDL_RenderLine(
+        sdlRenderer,
+        centerX + 10.0f,
+        centerY - 6.0f,
+        centerX + 15.0f,
+        centerY - 10.0f);
+}
+
+// ============================================================
+// Text Rendering
 // ============================================================
 
 SDL_Texture* MusicRenderer::createTextTexture(
@@ -1041,6 +1143,107 @@ bool MusicRenderer::pointInRect(
         y <= rect.y + rect.h;
 }
 
+MusicAction MusicRenderer::getAction(
+    float x,
+    float y,
+    const SDL_FRect& bounds) const
+{
+    const float currentY =
+        bounds.y +
+        SPECTRUM_HEIGHT +
+        SONG_INFO_HEIGHT +
+        PROGRESS_HEIGHT;
+
+    SDL_FRect controlsBounds{
+        bounds.x,
+        currentY,
+        bounds.w,
+        CONTROLS_HEIGHT
+    };
+
+    if (!pointInRect(
+            x,
+            y,
+            controlsBounds))
+    {
+        return MusicAction::None;
+    }
+
+    const float centerX =
+        controlsBounds.x +
+        controlsBounds.w / 2.0f;
+
+    const float centerY =
+        controlsBounds.y +
+        controlsBounds.h / 2.0f;
+
+    SDL_FRect loopButton{
+        centerX -
+            CONTROL_SPACING * 2.0f -
+            SIDE_BUTTON_SIZE / 2.0f,
+        centerY -
+            SIDE_BUTTON_SIZE / 2.0f,
+        SIDE_BUTTON_SIZE,
+        SIDE_BUTTON_SIZE
+    };
+
+    SDL_FRect previousButton{
+        centerX -
+            CONTROL_SPACING -
+            SIDE_BUTTON_SIZE / 2.0f,
+        centerY -
+            SIDE_BUTTON_SIZE / 2.0f,
+        SIDE_BUTTON_SIZE,
+        SIDE_BUTTON_SIZE
+    };
+
+    SDL_FRect playButton{
+        centerX -
+            PLAY_BUTTON_RADIUS,
+        centerY -
+            PLAY_BUTTON_RADIUS,
+        PLAY_BUTTON_RADIUS * 2.0f,
+        PLAY_BUTTON_RADIUS * 2.0f
+    };
+
+    SDL_FRect nextButton{
+        centerX +
+            CONTROL_SPACING -
+            SIDE_BUTTON_SIZE / 2.0f,
+        centerY -
+            SIDE_BUTTON_SIZE / 2.0f,
+        SIDE_BUTTON_SIZE,
+        SIDE_BUTTON_SIZE
+    };
+
+    SDL_FRect shuffleButton{
+        centerX +
+            CONTROL_SPACING * 2.0f -
+            SIDE_BUTTON_SIZE / 2.0f,
+        centerY -
+            SIDE_BUTTON_SIZE / 2.0f,
+        SIDE_BUTTON_SIZE,
+        SIDE_BUTTON_SIZE
+    };
+
+    if (pointInRect(x, y, loopButton))
+        return MusicAction::ToggleLoop;
+
+    if (pointInRect(x, y, previousButton))
+        return MusicAction::Previous;
+
+    if (pointInRect(x, y, playButton))
+        return MusicAction::PlayPause;
+
+    if (pointInRect(x, y, nextButton))
+        return MusicAction::Next;
+
+    if (pointInRect(x, y, shuffleButton))
+        return MusicAction::ToggleShuffle;
+
+    return MusicAction::None;
+}
+
 void MusicRenderer::handleTouch(
     float x,
     float y,
@@ -1049,20 +1252,10 @@ void MusicRenderer::handleTouch(
     if (!initialized)
         return;
 
-    /*
-     * Recreate the same vertical layout used by render().
-     */
-
-    float currentY =
+    const float currentY =
         bounds.y +
         SPECTRUM_HEIGHT +
         SONG_INFO_HEIGHT;
-
-    /*
-     * --------------------------------------------------------
-     * Progress bar
-     * --------------------------------------------------------
-     */
 
     SDL_FRect progressBounds{
         bounds.x,
@@ -1080,104 +1273,6 @@ void MusicRenderer::handleTouch(
             x,
             progressBounds);
 
-        return;
-    }
-
-    currentY +=
-        PROGRESS_HEIGHT;
-
-    /*
-     * --------------------------------------------------------
-     * Controls
-     * --------------------------------------------------------
-     */
-
-    SDL_FRect controlsBounds{
-        bounds.x,
-        currentY,
-        bounds.w,
-        CONTROLS_HEIGHT
-    };
-
-    if (!pointInRect(
-            x,
-            y,
-            controlsBounds))
-    {
-        return;
-    }
-
-    const float centerX =
-        controlsBounds.x +
-        controlsBounds.w / 2.0f;
-
-    const float centerY =
-        controlsBounds.y +
-        controlsBounds.h / 2.0f;
-
-    /*
-     * Play / pause.
-     */
-
-    SDL_FRect playButton{
-        centerX - 38.0f,
-        centerY - 38.0f,
-        76.0f,
-        76.0f
-    };
-
-    if (pointInRect(
-            x,
-            y,
-            playButton))
-    {
-        togglePlayPause();
-        return;
-    }
-
-    /*
-    * Previous.
-    */
-
-    SDL_FRect previousButton{
-        centerX -
-            CONTROL_SPACING -
-            SIDE_BUTTON_SIZE / 2.0f,
-        centerY -
-            SIDE_BUTTON_SIZE / 2.0f,
-        SIDE_BUTTON_SIZE,
-        SIDE_BUTTON_SIZE
-    };
-
-    if (pointInRect(
-            x,
-            y,
-            previousButton))
-    {
-        musicPlayer.previous();
-        return;
-    }
-
-    /*
-    * Next.
-    */
-
-    SDL_FRect nextButton{
-        centerX +
-            CONTROL_SPACING -
-            SIDE_BUTTON_SIZE / 2.0f,
-        centerY -
-            SIDE_BUTTON_SIZE / 2.0f,
-        SIDE_BUTTON_SIZE,
-        SIDE_BUTTON_SIZE
-    };
-
-    if (pointInRect(
-            x,
-            y,
-            nextButton))
-    {
-        musicPlayer.next();
         return;
     }
 }
@@ -1206,10 +1301,6 @@ void MusicRenderer::seekFromPosition(
 
     if (duration <= 0.0f)
         return;
-
-    /*
-     * Match the actual rendered progress track.
-     */
 
     constexpr float TIME_WIDTH = 45.0f;
 
@@ -1248,7 +1339,21 @@ void MusicRenderer::togglePlayPause()
 }
 
 // ============================================================
-// Format time
+// Music Player Access
+// ============================================================
+
+MusicPlayer& MusicRenderer::getMusicPlayer()
+{
+    return musicPlayer;
+}
+
+const MusicPlayer& MusicRenderer::getMusicPlayer() const
+{
+    return musicPlayer;
+}
+
+// ============================================================
+// Utility
 // ============================================================
 
 std::string MusicRenderer::formatTime(

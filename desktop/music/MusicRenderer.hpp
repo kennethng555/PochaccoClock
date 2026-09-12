@@ -9,6 +9,17 @@
 #include "MusicPlayer.hpp"
 #include "SpectrumAnalyzer.hpp"
 
+enum class MusicAction
+    {
+        None,
+        PlayPause,
+        Previous,
+        Next,
+        ToggleLoop,
+        ToggleShuffle
+    };
+
+
 class MusicRenderer
 {
 public:
@@ -34,8 +45,21 @@ public:
         float x,
         float y,
         const SDL_FRect& bounds);
+    
+    MusicAction getAction(
+        float x,
+        float y,
+        const SDL_FRect& bounds) const;
+    
+    bool isPlayButtonClicked(
+        float x,
+        float y,
+        const SDL_FRect& bounds) const;
 
     void togglePlayPause();
+
+    MusicPlayer& getMusicPlayer();
+    const MusicPlayer& getMusicPlayer() const;
 
 private:
     // ========================================================
@@ -58,7 +82,7 @@ private:
         SDL_Renderer* renderer,
         const SDL_FRect& bounds);
 
-    void renderPlayButton(
+    void renderLoopButton(
         SDL_Renderer* renderer,
         float centerX,
         float centerY);
@@ -68,7 +92,22 @@ private:
         float centerX,
         float centerY);
 
+    void renderPlayButton(
+        SDL_Renderer* renderer,
+        float centerX,
+        float centerY);
+
     void renderNextButton(
+        SDL_Renderer* renderer,
+        float centerX,
+        float centerY);
+
+    void renderShuffleButton(
+        SDL_Renderer* renderer,
+        float centerX,
+        float centerY);
+    
+    void renderActiveButtonCircle(
         SDL_Renderer* renderer,
         float centerX,
         float centerY);

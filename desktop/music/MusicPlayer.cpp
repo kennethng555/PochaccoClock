@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstring>
 #include <filesystem>
+#include <random>
 
 MusicPlayer::~MusicPlayer()
 {
@@ -160,6 +161,9 @@ bool MusicPlayer::loadDirectory(
 
     musicFiles.clear();
     currentTrackIndex = 0;
+    shuffledTracks.clear();
+    shufflePosition = 0;
+    shuffling = false;
 
     try
     {
@@ -245,14 +249,51 @@ void MusicPlayer::next()
     if (musicFiles.empty())
         return;
 
-    /*
-     * Move to the next track.
-     *
-     * Wrap around when reaching the end.
-     */
-    currentTrackIndex =
-        (currentTrackIndex + 1) %
-        musicFiles.size();
+    if (shuffling)
+    {
+        if (shuffledTracks.empty())
+        {
+            createShuffleOrder();
+        }
+
+        /*
+         * Move to the next position in the
+         * current shuffled playback order.
+         */
+        ++shufflePosition;
+
+        /*
+         * End of the shuffled order.
+         * Create a new order and skip the
+         * current track, which is always at
+         * position 0.
+         */
+        if (shufflePosition >= shuffledTracks.size())
+        {
+            createShuffleOrder();
+
+            if (shuffledTracks.size() > 1)
+            {
+                shufflePosition = 1;
+            }
+            else
+            {
+                shufflePosition = 0;
+            }
+        }
+
+        currentTrackIndex =
+            shuffledTracks[shufflePosition];
+    }
+    else
+    {
+        /*
+         * Normal sequential playback.
+         */
+        currentTrackIndex =
+            (currentTrackIndex + 1) %
+            musicFiles.size();
+    }
 
     SDL_Log(
         "Next track: %zu / %zu",
@@ -270,20 +311,48 @@ void MusicPlayer::previous()
     if (musicFiles.empty())
         return;
 
-    /*
-     * Move backwards.
-     *
-     * If we're already at track 0,
-     * wrap around to the last track.
-     */
-    if (currentTrackIndex == 0)
+    if (shuffling)
     {
+        if (shuffledTracks.empty())
+        {
+            createShuffleOrder();
+        }
+
+        /*
+         * Move backward through the current
+         * shuffled playback order.
+         */
+        if (shufflePosition == 0)
+        {
+            /*
+             * Wrap to the last track in the
+             * current shuffled order.
+             */
+            shufflePosition =
+                shuffledTracks.size() - 1;
+        }
+        else
+        {
+            --shufflePosition;
+        }
+
         currentTrackIndex =
-            musicFiles.size() - 1;
+            shuffledTracks[shufflePosition];
     }
     else
     {
-        --currentTrackIndex;
+        /*
+         * Normal sequential playback.
+         */
+        if (currentTrackIndex == 0)
+        {
+            currentTrackIndex =
+                musicFiles.size() - 1;
+        }
+        else
+        {
+            --currentTrackIndex;
+        }
     }
 
     SDL_Log(
@@ -425,16 +494,23 @@ void MusicPlayer::update()
             audioStream);
 
         /*
-         * Automatically advance to the next track.
+         * No playlist.
+         *
+         * This is the Music Box case.
+         * The MusicManager handles its looping.
          */
-        if (!musicFiles.empty())
+        if (musicFiles.empty())
         {
-            currentTrackIndex =
-                (currentTrackIndex + 1) %
-                musicFiles.size();
+            return;
+        }
 
+        /*
+         * Loop the CURRENT song.
+         */
+        if (looping)
+        {
             SDL_Log(
-                "Track finished. Advancing to track %zu / %zu",
+                "Track finished. Looping track %zu / %zu",
                 currentTrackIndex + 1,
                 musicFiles.size());
 
@@ -442,6 +518,68 @@ void MusicPlayer::update()
             {
                 play();
             }
+
+            return;
+        }
+
+        /*
+         * Shuffle.
+         */
+        if (shuffling)
+        {
+            /*
+            * Advance within the shuffled playlist.
+            */
+            ++shufflePosition;
+
+            /*
+            * The shuffled playlist is exhausted.
+            * Generate a new shuffled order.
+            */
+            if (shufflePosition >= shuffledTracks.size())
+            {
+                createShuffleOrder();
+
+                /*
+                * createShuffleOrder() puts the current
+                * track first. Skip it so we don't play
+                * the same song twice in a row.
+                */
+                if (shuffledTracks.size() > 1)
+                {
+                    shufflePosition = 1;
+                }
+                else
+                {
+                    /*
+                    * Only one song exists.
+                    * Replay it.
+                    */
+                    shufflePosition = 0;
+                }
+            }
+
+            currentTrackIndex =
+                shuffledTracks[shufflePosition];
+        }
+        else
+        {
+            /*
+            * Normal sequential playback.
+            */
+            currentTrackIndex =
+                (currentTrackIndex + 1) %
+                musicFiles.size();
+        }
+
+        SDL_Log(
+            "Track finished. Advancing to track %zu / %zu",
+            currentTrackIndex + 1,
+            musicFiles.size());
+
+        if (loadCurrentTrack())
+        {
+            play();
         }
     }
 }
@@ -669,6 +807,27 @@ bool MusicPlayer::isPlaying() const
 bool MusicPlayer::isLoaded() const
 {
     return loaded;
+}
+
+bool MusicPlayer::isLooping() const
+{
+    return looping;
+}
+
+void MusicPlayer::toggleLooping()
+{
+    looping = !looping;
+
+    if (looping)
+    {
+        /*
+         * Loop and shuffle are mutually exclusive.
+         */
+        shuffling = false;
+
+        shuffledTracks.clear();
+        shufflePosition = 0;
+    }
 }
 
 const float* MusicPlayer::getSamples() const
@@ -1015,4 +1174,82 @@ void MusicPlayer::parseWavMetadata(
         artist.c_str(),
         album.c_str(),
         genre.c_str());
+}
+
+void MusicPlayer::createShuffleOrder()
+{
+    shuffledTracks.clear();
+
+    if (musicFiles.empty())
+    {
+        shufflePosition = 0;
+        return;
+    }
+
+    /*
+     * Put the currently playing track first.
+     */
+    shuffledTracks.push_back(
+        currentTrackIndex);
+
+    /*
+     * Add every other track.
+     */
+    for (std::size_t i = 0;
+         i < musicFiles.size();
+         ++i)
+    {
+        if (i == currentTrackIndex)
+            continue;
+
+        shuffledTracks.push_back(i);
+    }
+
+    /*
+     * Shuffle everything AFTER the current track.
+     */
+    if (shuffledTracks.size() > 2)
+    {
+        std::random_device rd;
+        std::mt19937 generator(rd());
+
+        std::shuffle(
+            shuffledTracks.begin() + 1,
+            shuffledTracks.end(),
+            generator);
+    }
+
+    /*
+     * The current track is at position 0.
+     */
+    shufflePosition = 0;
+}
+
+bool MusicPlayer::isShuffling() const
+{
+    return shuffling;
+}
+
+void MusicPlayer::toggleShuffling()
+{
+    shuffling = !shuffling;
+
+    if (shuffling)
+    {
+        /*
+         * Shuffle and loop are mutually exclusive.
+         */
+        looping = false;
+
+        /*
+         * Build a new playback order without
+         * interrupting the current track.
+         */
+        createShuffleOrder();
+    }
+    else
+    {
+        shuffledTracks.clear();
+        shufflePosition = 0;
+    }
 }
