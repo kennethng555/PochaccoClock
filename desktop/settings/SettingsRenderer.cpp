@@ -330,7 +330,7 @@ void SettingsRenderer::renderMainSettings(
     drawText(
         renderer,
         optionFont_,
-        "Loop Music",
+        "MusicBox Loop",
         bounds.x + 40.0f,
         firstRowY,
         TEXT_COLOR);

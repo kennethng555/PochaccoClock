@@ -42,30 +42,91 @@ void MusicManager::update(
     if (!initialized)
         return;
 
+    /*
+     * --------------------------------------------------------
+     * Alarm
+     * --------------------------------------------------------
+     */
+
     if (alarmPlaying)
     {
         alarmTimer += deltaTime;
 
         if (alarmTimer >= 30.0f)
         {
+            /*
+             * Stop the alarm.
+             */
             musicBoxPlayer.stop();
 
             alarmPlaying = false;
             alarmTimer = 0.0f;
+
+            /*
+             * ------------------------------------------------
+             * Resume the normal Music Player.
+             * ------------------------------------------------
+             */
+            if (resumeMusicPlayerAfterAlarm)
+            {
+                MusicPlayer& player =
+                    renderer.getMusicPlayer();
+
+                player.play();
+            }
+
+            /*
+             * ------------------------------------------------
+             * Resume the Music Box.
+             * ------------------------------------------------
+             *
+             * The current implementation reloads the song,
+             * so it resumes from the beginning.
+             */
+            if (resumeMusicBoxAfterAlarm &&
+                !resumeMusicBoxPath.empty())
+            {
+                if (musicBoxPlayer.load(
+                        resumeMusicBoxPath.c_str()))
+                {
+                    musicBoxPlayer.play();
+                    musicBoxPlaying = true;
+                }
+            }
+
+            /*
+             * Clear saved alarm state.
+             */
+            resumeMusicPlayerAfterAlarm = false;
+            resumeMusicBoxAfterAlarm = false;
+            resumeMusicBoxPath.clear();
         }
     }
-    
+
     /*
+     * --------------------------------------------------------
      * Update the full Music Player.
+     * --------------------------------------------------------
      */
+
     renderer.update();
 
     /*
+     * --------------------------------------------------------
      * Update the independent Music Box player.
+     * --------------------------------------------------------
      */
+
     musicBoxPlayer.update();
 
-    if (musicBoxPlaying &&
+    /*
+     * Keep Music Box looping when it is supposed to be
+     * active.
+     *
+     * Do not do this while an alarm is playing.
+     */
+    if (!alarmPlaying &&
+        musicBoxPlaying &&
         !musicBoxPlayer.isPlaying())
     {
         musicBoxPlayer.play();
@@ -319,7 +380,8 @@ void MusicManager::setLooping(bool enabled)
 }
 
 void MusicManager::playSound(
-    const std::string& path)
+    const std::string& path,
+    const std::string& resumePath)
 {
     if (!initialized)
         return;
@@ -336,23 +398,47 @@ void MusicManager::playSound(
         renderer.getMusicPlayer();
 
     /*
-     * Pause normal Music Player.
+     * Remember what was playing.
      */
-    if (player.isPlaying())
+    resumeMusicPlayerAfterAlarm =
+        player.isPlaying();
+
+    resumeMusicBoxAfterAlarm =
+        musicBoxPlaying;
+
+    resumeMusicBoxPath =
+        resumePath;
+
+    /*
+     * Pause the normal Music Player.
+     */
+    if (resumeMusicPlayerAfterAlarm)
     {
         player.pause();
     }
 
     /*
-     * Stop Music Box.
+     * Stop the Music Box so that the alarm can
+     * use the Music Box player.
      */
-    musicBoxPlayer.stop();
+    if (resumeMusicBoxAfterAlarm)
+    {
+        musicBoxPlayer.stop();
+        musicBoxPlaying = false;
+    }
 
+    /*
+     * Load the alarm.
+     */
     if (!musicBoxPlayer.load(path.c_str()))
     {
         SDL_Log(
             "MusicManager: failed to load alarm sound: %s",
             path.c_str());
+
+        resumeMusicPlayerAfterAlarm = false;
+        resumeMusicBoxAfterAlarm = false;
+        resumeMusicBoxPath.clear();
 
         alarmPlaying = false;
 
@@ -360,11 +446,10 @@ void MusicManager::playSound(
     }
 
     /*
-     * Alarm is a one-shot sound.
-     * The timer below controls its duration.
+     * Keep the alarm playing until the alarm timer
+     * expires.
      */
     musicBoxPlayer.setLooping(true);
-
     musicBoxPlayer.play();
 
     alarmPlaying = true;

@@ -1,0 +1,133 @@
+{
+    "alarms": [
+        {
+            "enabled": true,
+            "hour": 13,
+            "minute": 45,
+            "playMusic": true,
+            "repeatDays": [
+                true,
+                true,
+                true,
+                true,
+                true,
+                false,
+                false
+            ],
+            "showAnimation": true,
+            "soundPath": "../assets/alarm/alarm.wav"
+        },
+        {
+            "enabled": false,
+            "hour": 7,
+            "minute": 0,
+            "playMusic": true,
+            "repeatDays": [
+                true,
+                true,
+                true,
+                true,
+                true,
+                false,
+                false
+            ],
+            "showAnimation": true,
+            "soundPath": "../assets/alarm/alarm.wav"
+        },
+        {
+            "enabled": false,
+            "hour": 7,
+            "minute": 0,
+            "playMusic": true,
+            "repeatDays": [
+                true,
+                true,
+                true,
+                true,
+                true,
+                false,
+                false
+            ],
+            "showAnimation": true,
+            "soundPath": "../assets/alarm/alarm.wav"
+        }
+    ],
+    "animations": [
+        {
+            "directory": "../assets/Simba",
+            "displayDuration": 30.0,
+            "enabled": true,
+            "endHour": 22,
+            "frameCount": 8,
+            "frameDuration": 0.10000000149011612,
+            "height": 112.5,
+            "name": "Simba",
+            "randomEnabled": false,
+            "scheduled": true,
+            "scheduledHour": 12,
+            "scheduledMinute": 0,
+            "startHour": 8,
+            "width": 150.0,
+            "x": 5.0,
+            "y": 325.0
+        },
+        {
+            "directory": "",
+            "displayDuration": 30.0,
+            "enabled": true,
+            "endHour": 22,
+            "frameCount": 0,
+            "frameDuration": 0.10000000149011612,
+            "height": 112.5,
+            "name": "",
+            "randomEnabled": false,
+            "scheduled": false,
+            "scheduledHour": 0,
+            "scheduledMinute": 0,
+            "startHour": 8,
+            "width": 150.0,
+            "x": 5.0,
+            "y": 325.0
+        },
+        {
+            "directory": "",
+            "displayDuration": 30.0,
+            "enabled": true,
+            "endHour": 22,
+            "frameCount": 0,
+            "frameDuration": 0.10000000149011612,
+            "height": 112.5,
+            "name": "",
+            "randomEnabled": false,
+            "scheduled": false,
+            "scheduledHour": 0,
+            "scheduledMinute": 0,
+            "startHour": 8,
+            "width": 150.0,
+            "x": 5.0,
+            "y": 325.0
+        },
+        {
+            "directory": "",
+            "displayDuration": 30.0,
+            "enabled": true,
+            "endHour": 22,
+            "frameCount": 0,
+            "frameDuration": 0.10000000149011612,
+            "height": 112.5,
+            "name": "",
+            "randomEnabled": false,
+            "scheduled": false,
+            "scheduledHour": 0,
+            "scheduledMinute": 0,
+            "startHour": 8,
+            "width": 150.0,
+            "x": 5.0,
+            "y": 325.0
+        }
+    ],
+    "music": {
+        "loop": true,
+        "songPath": "../assets/music/NextToYou.wav"
+    }
+}

@@ -70,8 +70,8 @@ constexpr SDL_FRect CLOCK_BOUNDS = {
 // ============================================================
 
 constexpr SDL_FRect MUSIC_BOX_BUTTON_BOUNDS = {
-    35.0f,
-    365.0f,
+    LOGICAL_WIDTH * 0.5f - 145.0f / 2.0f,
+    LOGICAL_HEIGHT * 0.1f - 48.0f / 2.0f,
     145.0f,
     48.0f
 };
@@ -1307,7 +1307,8 @@ int main(int argc, char* argv[])
                     if (alarm.playMusic)
                     {
                         musicManager.playSound(
-                            alarm.soundPath);
+                            alarm.soundPath,
+                            settings.get().music.songPath);
                     }
                 }
 

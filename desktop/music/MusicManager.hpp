@@ -46,7 +46,8 @@ public:
     void setLooping(bool enabled);
 
     void playSound(
-        const std::string& path);
+        const std::string& path,
+        const std::string& resumeMusicBoxPath);
 
 private:
     MusicRenderer renderer;
@@ -59,4 +60,9 @@ private:
 
     bool alarmPlaying = false;
     float alarmTimer = 0.0f;
+
+    bool resumeMusicPlayerAfterAlarm = false;
+    bool resumeMusicBoxAfterAlarm = false;
+
+    std::string resumeMusicBoxPath;
 };
