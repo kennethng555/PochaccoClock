@@ -1,4 +1,3 @@
-
 #include "SettingsRenderer.hpp"
 
 #include <SDL3/SDL.h>
@@ -79,7 +78,8 @@ std::vector<std::string> getAlarmSounds()
     const std::filesystem::path directory =
         "../assets/alarm";
 
-    if (!std::filesystem::exists(directory))
+    if (!std::filesystem::exists(directory) ||
+        !std::filesystem::is_directory(directory))
     {
         return sounds;
     }
@@ -109,7 +109,60 @@ std::vector<std::string> getAlarmSounds()
 
     return sounds;
 }
+
+/*
+ * ============================================================
+ * Alarm animations
+ * ============================================================
+ *
+ * Each immediate subdirectory of:
+ *
+ *     ../assets/animations
+ *
+ * is treated as an animation.
+ *
+ * Example:
+ *
+ *     ../assets/animations/Simba
+ *     ../assets/animations/Toto
+ *
+ */
+std::vector<std::string> getAlarmAnimations()
+{
+    std::vector<std::string> animations;
+
+    const std::filesystem::path directory =
+        "../assets/animations";
+
+    if (!std::filesystem::exists(directory) ||
+        !std::filesystem::is_directory(directory))
+    {
+        return animations;
+    }
+
+    for (const auto& entry :
+         std::filesystem::directory_iterator(directory))
+    {
+        if (!entry.is_directory())
+        {
+            continue;
+        }
+
+        animations.push_back(
+            entry.path().string());
+    }
+
+    std::sort(
+        animations.begin(),
+        animations.end());
+
+    return animations;
 }
+}
+
+// ============================================================
+// Destructor
+// ============================================================
 
 SettingsRenderer::~SettingsRenderer()
 {
@@ -131,6 +184,10 @@ SettingsRenderer::~SettingsRenderer()
         smallFont_ = nullptr;
     }
 }
+
+// ============================================================
+// Initialize
+// ============================================================
 
 bool SettingsRenderer::initialize(
     SDL_Renderer* renderer,
@@ -171,6 +228,10 @@ bool SettingsRenderer::initialize(
     return true;
 }
 
+// ============================================================
+// Render
+// ============================================================
+
 void SettingsRenderer::render(
     SDL_Renderer* renderer,
     const SDL_FRect& bounds,
@@ -181,16 +242,6 @@ void SettingsRenderer::render(
         return;
     }
 
-    /*
-     * IMPORTANT:
-     *
-     * SDL renderer state persists between frames.
-     *
-     * Always begin the settings screen with
-     * clipping disabled so a clip left behind by
-     * another rendering operation cannot blank the
-     * settings screen.
-     */
     SDL_SetRenderClipRect(
         renderer,
         nullptr);
@@ -216,15 +267,25 @@ void SettingsRenderer::render(
      * If the selected alarm was deleted,
      * return to the main settings page.
      */
-    if (editingAlarm_ &&
+    if ((editingAlarm_ ||
+         selectingAlarmSound_ ||
+         selectingAlarmAnimation_) &&
         selectedAlarm_ >= config.alarms.size())
     {
         editingAlarm_ = false;
+        selectingAlarmSound_ = false;
+        selectingAlarmAnimation_ = false;
+
+        selectedAlarmSound_.clear();
+        selectedAlarmAnimation_.clear();
+
         selectedAlarm_ = 0;
     }
 
     /*
-     * Alarm sound selector.
+     * ========================================================
+     * Alarm sound selector
+     * ========================================================
      */
     if (selectingAlarmSound_)
     {
@@ -236,9 +297,6 @@ void SettingsRenderer::render(
                 config.alarms[selectedAlarm_]);
         }
 
-        /*
-         * Do not leave clipping enabled.
-         */
         SDL_SetRenderClipRect(
             renderer,
             nullptr);
@@ -247,7 +305,31 @@ void SettingsRenderer::render(
     }
 
     /*
-     * Alarm editor.
+     * ========================================================
+     * Alarm animation selector
+     * ========================================================
+     */
+    if (selectingAlarmAnimation_)
+    {
+        if (selectedAlarm_ < config.alarms.size())
+        {
+            renderAlarmAnimationSelector(
+                renderer,
+                bounds,
+                config.alarms[selectedAlarm_]);
+        }
+
+        SDL_SetRenderClipRect(
+            renderer,
+            nullptr);
+
+        return;
+    }
+
+    /*
+     * ========================================================
+     * Alarm editor
+     * ========================================================
      */
     if (editingAlarm_)
     {
@@ -256,9 +338,6 @@ void SettingsRenderer::render(
             bounds,
             config.alarms[selectedAlarm_]);
 
-        /*
-         * Do not leave clipping enabled.
-         */
         SDL_SetRenderClipRect(
             renderer,
             nullptr);
@@ -267,38 +346,37 @@ void SettingsRenderer::render(
     }
 
     /*
-     * Main settings.
+     * ========================================================
+     * Main settings
+     * ========================================================
      */
     renderMainSettings(
         renderer,
         bounds,
         config);
 
-    /*
-     * Defensive cleanup:
-     * the settings renderer should never leave
-     * a clip rectangle enabled.
-     */
     SDL_SetRenderClipRect(
         renderer,
         nullptr);
 }
+
+// ============================================================
+// Main settings
+// ============================================================
 
 void SettingsRenderer::renderMainSettings(
     SDL_Renderer* renderer,
     const SDL_FRect& bounds,
     const ClockSettings& config)
 {
-    /*
-     * Make absolutely sure the main settings page
-     * begins without a clip rectangle.
-     */
     SDL_SetRenderClipRect(
         renderer,
         nullptr);
 
     /*
-     * Title.
+     * ========================================================
+     * Fixed Settings title
+     * ========================================================
      */
     drawText(
         renderer,
@@ -309,35 +387,132 @@ void SettingsRenderer::renderMainSettings(
         TEXT_COLOR);
 
     /*
-     * -------------------------
+     * ========================================================
+     * Scroll viewport
+     * ========================================================
+     */
+    const float scrollTop =
+        bounds.y + 60.0f;
+
+    const float scrollBottom =
+        bounds.y + bounds.h - 65.0f;
+
+    SDL_FRect scrollBounds{
+        bounds.x,
+        scrollTop,
+        bounds.w,
+        scrollBottom - scrollTop
+    };
+
+    /*
+     * ========================================================
+     * Content positions
+     * ========================================================
+     */
+
+    const float musicY =
+        bounds.y + 70.0f;
+
+    const float firstRowY =
+        bounds.y + 110.0f;
+
+    const float songY =
+        firstRowY + ROW_HEIGHT;
+
+    const float alarmsTitleY =
+        songY + 65.0f;
+
+    const float alarmStartY =
+        alarmsTitleY + 50.0f;
+
+    const float addAlarmY =
+        alarmStartY +
+        static_cast<float>(config.alarms.size()) *
+            ALARM_ROW_HEIGHT +
+        10.0f;
+
+    /*
+     * Debug section immediately follows Add Alarm.
+     */
+    const float debugTitleY =
+        addAlarmY + 50.0f;
+
+    const float debugAnimationY =
+        debugTitleY + 35.0f;
+
+    /*
+     * Include the Debug section in the scrollable
+     * content height.
+     */
+    const float contentBottom =
+        debugAnimationY + 50.0f;
+
+    const float contentTop =
+        scrollTop;
+
+    const float contentHeight =
+        contentBottom - contentTop;
+
+    const float maxScroll =
+        std::max(
+            0.0f,
+            contentHeight - scrollBounds.h);
+
+    alarmScrollOffset_ =
+        std::clamp(
+            alarmScrollOffset_,
+            0.0f,
+            maxScroll);
+
+    const float scrollOffset =
+        alarmScrollOffset_;
+
+    /*
+     * ========================================================
+     * Clip scrollable content
+     * ========================================================
+     */
+    SDL_Rect scrollClip{
+        static_cast<int>(scrollBounds.x),
+        static_cast<int>(scrollBounds.y),
+        static_cast<int>(scrollBounds.w),
+        static_cast<int>(scrollBounds.h)
+    };
+
+    SDL_SetRenderClipRect(
+        renderer,
+        &scrollClip);
+
+    /*
+     * ========================================================
      * Music
-     * -------------------------
+     * ========================================================
      */
     drawText(
         renderer,
         optionFont_,
         "Music",
         bounds.x + 30.0f,
-        bounds.y + 70.0f,
+        musicY - scrollOffset,
         TEXT_COLOR);
 
-    const float firstRowY =
-        bounds.y + 110.0f;
-
     /*
-     * Loop Music.
+     * Music Box Loop.
      */
+    const float visibleFirstRowY =
+        firstRowY - scrollOffset;
+
     drawText(
         renderer,
         optionFont_,
         "MusicBox Loop",
         bounds.x + 40.0f,
-        firstRowY,
+        visibleFirstRowY,
         TEXT_COLOR);
 
     SDL_FRect loopToggle{
         bounds.x + bounds.w - 105.0f,
-        firstRowY - 4.0f,
+        visibleFirstRowY - 4.0f,
         70.0f,
         32.0f
     };
@@ -348,17 +523,19 @@ void SettingsRenderer::renderMainSettings(
         config.music.loop);
 
     /*
-     * Music Box Song.
+     * ========================================================
+     * Music Box Song
+     * ========================================================
      */
-    const float songY =
-        firstRowY + ROW_HEIGHT;
+    const float visibleSongY =
+        songY - scrollOffset;
 
     drawText(
         renderer,
         optionFont_,
         "Music Box Song",
         bounds.x + 40.0f,
-        songY,
+        visibleSongY,
         TEXT_COLOR);
 
     drawText(
@@ -366,7 +543,7 @@ void SettingsRenderer::renderMainSettings(
         smallFont_,
         getFileName(config.music.songPath),
         bounds.x + 40.0f,
-        songY + 27.0f,
+        visibleSongY + 27.0f,
         MUTED_COLOR);
 
     drawText(
@@ -374,113 +551,45 @@ void SettingsRenderer::renderMainSettings(
         optionFont_,
         ">",
         bounds.x + bounds.w - 45.0f,
-        songY + 5.0f,
+        visibleSongY + 5.0f,
         TEXT_COLOR);
 
     /*
-     * -------------------------
-     * Alarms
-     * -------------------------
+     * ========================================================
+     * Alarms title
+     * ========================================================
      */
-    const float alarmsTitleY =
-        songY + 65.0f;
+    const float visibleAlarmsTitleY =
+        alarmsTitleY - scrollOffset;
 
     drawText(
         renderer,
         optionFont_,
         "Alarms",
         bounds.x + 30.0f,
-        alarmsTitleY,
+        visibleAlarmsTitleY,
         TEXT_COLOR);
 
     /*
-     * -------------------------
-     * Alarm list bounds
-     * -------------------------
-     *
-     * This rectangle is ONLY the viewport
-     * for the scrolling alarm list.
+     * ========================================================
+     * Alarm rows
+     * ========================================================
      */
-    SDL_FRect alarmListBounds{
-        bounds.x,
-        alarmsTitleY + 50.0f,
-        bounds.w,
-        (
-            bounds.y +
-            bounds.h -
-            85.0f
-        ) -
-        (
-            alarmsTitleY + 50.0f
-        )
-    };
-
-    /*
-     * Total alarm content height.
-     */
-    const float contentHeight =
-        static_cast<float>(config.alarms.size()) *
-        ALARM_ROW_HEIGHT;
-
-    /*
-     * Maximum scroll distance.
-     */
-    const float maxScroll =
-        std::max(
-            0.0f,
-            contentHeight -
-                alarmListBounds.h);
-
-    /*
-     * Clamp scroll position.
-     */
-    alarmScrollOffset_ =
-        std::clamp(
-            alarmScrollOffset_,
-            0.0f,
-            maxScroll);
-
-    /*
-     * Convert the alarm viewport to an SDL_Rect.
-     */
-    SDL_Rect alarmClip{
-        static_cast<int>(alarmListBounds.x),
-        static_cast<int>(alarmListBounds.y),
-        static_cast<int>(alarmListBounds.w),
-        static_cast<int>(alarmListBounds.h)
-    };
-
-    /*
-     * Enable clipping ONLY for the alarm list.
-     */
-    SDL_SetRenderClipRect(
-        renderer,
-        &alarmClip);
-
-    /*
-     * Alarm content starts at the top of the
-     * alarm list and moves upward as the user
-     * scrolls.
-     */
-    const float alarmStartY =
-        alarmListBounds.y -
-        alarmScrollOffset_;
+    const float visibleAlarmStartY =
+        alarmStartY - scrollOffset;
 
     for (std::size_t i = 0;
          i < config.alarms.size();
          ++i)
     {
         const float alarmY =
-            alarmStartY +
+            visibleAlarmStartY +
             static_cast<float>(i) *
                 ALARM_ROW_HEIGHT;
 
         const AlarmConfig& alarm =
             config.alarms[i];
 
-        /*
-         * Alarm name.
-         */
         drawText(
             renderer,
             optionFont_,
@@ -490,9 +599,6 @@ void SettingsRenderer::renderMainSettings(
             alarmY,
             TEXT_COLOR);
 
-        /*
-         * Alarm time.
-         */
         drawText(
             renderer,
             smallFont_,
@@ -503,9 +609,6 @@ void SettingsRenderer::renderMainSettings(
             alarmY + 26.0f,
             MUTED_COLOR);
 
-        /*
-         * ON/OFF.
-         */
         SDL_FRect toggleBounds{
             bounds.x + bounds.w - 105.0f,
             alarmY - 4.0f,
@@ -518,9 +621,6 @@ void SettingsRenderer::renderMainSettings(
             toggleBounds,
             alarm.enabled);
 
-        /*
-         * Arrow.
-         */
         drawText(
             renderer,
             optionFont_,
@@ -531,26 +631,16 @@ void SettingsRenderer::renderMainSettings(
     }
 
     /*
-     * IMPORTANT:
-     *
-     * Do NOT restore an SDL_Rect captured from
-     * SDL_GetRenderClipRect().
-     *
-     * If there was no previous clip rectangle,
-     * the correct state is simply "no clip".
-     */
-    SDL_SetRenderClipRect(
-        renderer,
-        nullptr);
-
-    /*
-     * -------------------------
+     * ========================================================
      * Add Alarm
-     * -------------------------
+     * ========================================================
      */
+    const float visibleAddAlarmY =
+        addAlarmY - scrollOffset;
+
     SDL_FRect addAlarmBounds{
         bounds.x + 30.0f,
-        bounds.y + bounds.h - 85.0f,
+        visibleAddAlarmY,
         160.0f,
         40.0f
     };
@@ -564,9 +654,53 @@ void SettingsRenderer::renderMainSettings(
         TEXT_COLOR);
 
     /*
-     * -------------------------
-     * Back
-     * -------------------------
+     * ========================================================
+     * Debug
+     * ========================================================
+     */
+    const float visibleDebugTitleY =
+        debugTitleY - scrollOffset;
+
+    const float visibleDebugAnimationY =
+        debugAnimationY - scrollOffset;
+
+    drawText(
+        renderer,
+        optionFont_,
+        "Debug",
+        bounds.x + 30.0f,
+        visibleDebugTitleY,
+        TEXT_COLOR);
+
+    drawText(
+        renderer,
+        optionFont_,
+        "Show Animation",
+        bounds.x + 40.0f,
+        visibleDebugAnimationY,
+        TEXT_COLOR);
+
+    drawText(
+        renderer,
+        optionFont_,
+        ">",
+        bounds.x + bounds.w - 45.0f,
+        visibleDebugAnimationY,
+        TEXT_COLOR);
+
+    /*
+     * ========================================================
+     * Stop clipping before Back
+     * ========================================================
+     */
+    SDL_SetRenderClipRect(
+        renderer,
+        nullptr);
+
+    /*
+     * ========================================================
+     * Fixed Back
+     * ========================================================
      */
     SDL_FRect backBounds{
         bounds.x + bounds.w - 120.0f,
@@ -583,23 +717,20 @@ void SettingsRenderer::renderMainSettings(
         backBounds.y + 5.0f,
         TEXT_COLOR);
 
-    /*
-     * Final defensive cleanup.
-     */
     SDL_SetRenderClipRect(
         renderer,
         nullptr);
 }
+
+// ============================================================
+// Alarm editor
+// ============================================================
 
 void SettingsRenderer::renderAlarmEditor(
     SDL_Renderer* renderer,
     const SDL_FRect& bounds,
     const AlarmConfig& alarm)
 {
-    /*
-     * Make sure the editor is never clipped by
-     * the main alarm-list viewport.
-     */
     SDL_SetRenderClipRect(
         renderer,
         nullptr);
@@ -613,14 +744,16 @@ void SettingsRenderer::renderAlarmEditor(
         "Alarm " +
             std::to_string(selectedAlarm_ + 1),
         bounds.x + 25.0f,
-        bounds.y + 20.0f,
+        bounds.y + 15.0f,
         TEXT_COLOR);
 
     /*
-     * Enabled.
+     * ========================================================
+     * Alarm enabled
+     * ========================================================
      */
     const float enabledY =
-        bounds.y + 75.0f;
+        bounds.y + 65.0f;
 
     drawText(
         renderer,
@@ -643,10 +776,12 @@ void SettingsRenderer::renderAlarmEditor(
         alarm.enabled);
 
     /*
-     * Time.
+     * ========================================================
+     * Time
+     * ========================================================
      */
     const float timeY =
-        bounds.y + 125.0f;
+        bounds.y + 110.0f;
 
     drawText(
         renderer,
@@ -720,14 +855,16 @@ void SettingsRenderer::renderAlarmEditor(
         smallFont_,
         "tap hour / minute / AM-PM",
         bounds.x + 160.0f,
-        timeY + 27.0f,
+        timeY + 25.0f,
         MUTED_COLOR);
 
     /*
-     * Repeat.
+     * ========================================================
+     * Repeat
+     * ========================================================
      */
     const float repeatY =
-        bounds.y + 185.0f;
+        bounds.y + 165.0f;
 
     constexpr char DAY_NAMES[] =
     {
@@ -740,11 +877,11 @@ void SettingsRenderer::renderAlarmEditor(
         'S'
     };
 
-    constexpr float DAY_SIZE = 38.0f;
-    constexpr float DAY_GAP = 5.0f;
+    constexpr float DAY_SIZE = 36.0f;
+    constexpr float DAY_GAP = 4.0f;
 
     const float dayY =
-        repeatY + 35.0f;
+        repeatY + 30.0f;
 
     for (int day = 0; day < 7; ++day)
     {
@@ -785,16 +922,18 @@ void SettingsRenderer::renderAlarmEditor(
             std::string(
                 1,
                 DAY_NAMES[day]),
-            dayBounds.x + 13.0f,
-            dayBounds.y + 9.0f,
+            dayBounds.x + 12.0f,
+            dayBounds.y + 8.0f,
             TEXT_COLOR);
     }
 
     /*
-     * Sound.
+     * ========================================================
+     * Sound selection
+     * ========================================================
      */
     const float soundY =
-        dayY + 60.0f;
+        dayY + 50.0f;
 
     drawText(
         renderer,
@@ -821,47 +960,71 @@ void SettingsRenderer::renderAlarmEditor(
         TEXT_COLOR);
 
     /*
-     * Animation.
+     * ========================================================
+     * Animation selection
+     * ========================================================
+     *
+     * There is no longer an ON/OFF toggle.
+     *
+     * Empty animationDirectory = None.
      */
-    const float animationY =
-        soundY + 55.0f;
+    const float animationSelectY =
+        soundY + 42.0f;
 
     drawText(
         renderer,
         optionFont_,
         "Animation",
         bounds.x + 40.0f,
-        animationY,
+        animationSelectY,
         TEXT_COLOR);
 
-    SDL_FRect animationToggle{
-        bounds.x + bounds.w - 105.0f,
-        animationY - 4.0f,
-        70.0f,
-        32.0f
-    };
+    const std::string animationName =
+        alarm.animationDirectory.empty()
+            ? "None"
+            : getFileName(
+                  alarm.animationDirectory);
 
-    drawToggle(
+    drawText(
         renderer,
-        animationToggle,
-        alarm.showAnimation);
+        smallFont_,
+        animationName,
+        bounds.x + 160.0f,
+        animationSelectY + 3.0f,
+        MUTED_COLOR);
+
+    drawText(
+        renderer,
+        optionFont_,
+        ">",
+        bounds.x + bounds.w - 45.0f,
+        animationSelectY,
+        TEXT_COLOR);
 
     /*
-     * Delete.
+     * ========================================================
+     * Delete
+     * ========================================================
      */
-    const float deleteY =
-        animationY + 55.0f;
+    SDL_FRect deleteBounds{
+        bounds.x + 25.0f,
+        bounds.y + bounds.h - 55.0f,
+        90.0f,
+        35.0f
+    };
 
     drawText(
         renderer,
         optionFont_,
         "Delete",
-        bounds.x + 40.0f,
-        deleteY,
+        deleteBounds.x + 10.0f,
+        deleteBounds.y + 5.0f,
         TEXT_COLOR);
 
     /*
-     * Back.
+     * ========================================================
+     * Back
+     * ========================================================
      */
     SDL_FRect backBounds{
         bounds.x + bounds.w - 120.0f,
@@ -878,23 +1041,20 @@ void SettingsRenderer::renderAlarmEditor(
         backBounds.y + 5.0f,
         TEXT_COLOR);
 
-    /*
-     * Defensive cleanup.
-     */
     SDL_SetRenderClipRect(
         renderer,
         nullptr);
 }
+
+// ============================================================
+// Alarm sound selector
+// ============================================================
 
 void SettingsRenderer::renderAlarmSoundSelector(
     SDL_Renderer* renderer,
     const SDL_FRect& bounds,
     const AlarmConfig& alarm)
 {
-    /*
-     * Make sure the sound selector starts
-     * without any inherited clipping.
-     */
     SDL_SetRenderClipRect(
         renderer,
         nullptr);
@@ -995,13 +1155,171 @@ void SettingsRenderer::renderAlarmSoundSelector(
         backBounds.y + 5.0f,
         TEXT_COLOR);
 
-    /*
-     * Defensive cleanup.
-     */
     SDL_SetRenderClipRect(
         renderer,
         nullptr);
 }
+
+// ============================================================
+// Alarm animation selector
+// ============================================================
+
+void SettingsRenderer::renderAlarmAnimationSelector(
+    SDL_Renderer* renderer,
+    const SDL_FRect& bounds,
+    const AlarmConfig& alarm)
+{
+    SDL_SetRenderClipRect(
+        renderer,
+        nullptr);
+
+    drawText(
+        renderer,
+        titleFont_,
+        "Alarm Animation",
+        bounds.x + 25.0f,
+        bounds.y + 20.0f,
+        TEXT_COLOR);
+
+    const std::vector<std::string> animations =
+        getAlarmAnimations();
+
+    /*
+     * ========================================================
+     * None
+     * ========================================================
+     */
+    float y =
+        bounds.y + 75.0f;
+
+    {
+        const bool selected =
+            alarm.animationDirectory.empty();
+
+        SDL_FRect rowBounds{
+            bounds.x + 25.0f,
+            y - 5.0f,
+            bounds.w - 50.0f,
+            42.0f
+        };
+
+        if (selected)
+        {
+            SDL_SetRenderDrawColor(
+                renderer,
+                170,
+                220,
+                180,
+                255);
+
+            SDL_RenderFillRect(
+                renderer,
+                &rowBounds);
+        }
+
+        drawText(
+            renderer,
+            optionFont_,
+            "None",
+            bounds.x + 40.0f,
+            y + 3.0f,
+            TEXT_COLOR);
+
+        if (selected)
+        {
+            drawText(
+                renderer,
+                optionFont_,
+                "✓",
+                bounds.x + bounds.w - 65.0f,
+                y + 3.0f,
+                TEXT_COLOR);
+        }
+    }
+
+    y += 48.0f;
+
+    /*
+     * ========================================================
+     * Animation folders
+     * ========================================================
+     */
+    for (const std::string& animation :
+         animations)
+    {
+        const bool selected =
+            animation ==
+            alarm.animationDirectory;
+
+        SDL_FRect rowBounds{
+            bounds.x + 25.0f,
+            y - 5.0f,
+            bounds.w - 50.0f,
+            42.0f
+        };
+
+        if (selected)
+        {
+            SDL_SetRenderDrawColor(
+                renderer,
+                170,
+                220,
+                180,
+                255);
+
+            SDL_RenderFillRect(
+                renderer,
+                &rowBounds);
+        }
+
+        drawText(
+            renderer,
+            optionFont_,
+            getFileName(animation),
+            bounds.x + 40.0f,
+            y + 3.0f,
+            TEXT_COLOR);
+
+        if (selected)
+        {
+            drawText(
+                renderer,
+                optionFont_,
+                "✓",
+                bounds.x + bounds.w - 65.0f,
+                y + 3.0f,
+                TEXT_COLOR);
+        }
+
+        y += 48.0f;
+    }
+
+    /*
+     * Back.
+     */
+    SDL_FRect backBounds{
+        bounds.x + bounds.w - 120.0f,
+        bounds.y + bounds.h - 55.0f,
+        90.0f,
+        35.0f
+    };
+
+    drawText(
+        renderer,
+        optionFont_,
+        "Back",
+        backBounds.x + 20.0f,
+        backBounds.y + 5.0f,
+        TEXT_COLOR);
+
+    SDL_SetRenderClipRect(
+        renderer,
+        nullptr);
+}
+
+// ============================================================
+// Draw text
+// ============================================================
 
 void SettingsRenderer::drawText(
     SDL_Renderer* renderer,
@@ -1056,6 +1374,10 @@ void SettingsRenderer::drawText(
     SDL_DestroySurface(surface);
 }
 
+// ============================================================
+// Toggle
+// ============================================================
+
 void SettingsRenderer::drawToggle(
     SDL_Renderer* renderer,
     const SDL_FRect& bounds,
@@ -1093,6 +1415,10 @@ void SettingsRenderer::drawToggle(
         TEXT_COLOR);
 }
 
+// ============================================================
+// Point in rectangle
+// ============================================================
+
 bool SettingsRenderer::pointInRect(
     float x,
     float y,
@@ -1105,6 +1431,10 @@ bool SettingsRenderer::pointInRect(
         y <= bounds.y + bounds.h;
 }
 
+// ============================================================
+// Get action
+// ============================================================
+
 SettingsAction SettingsRenderer::getAction(
     float x,
     float y,
@@ -1115,9 +1445,9 @@ SettingsAction SettingsRenderer::getAction(
         settings.get();
 
     /*
-     * =========================
+     * ========================================================
      * Alarm sound selector
-     * =========================
+     * ========================================================
      */
     if (selectingAlarmSound_)
     {
@@ -1181,9 +1511,110 @@ SettingsAction SettingsRenderer::getAction(
     }
 
     /*
-     * =========================
+     * ========================================================
+     * Alarm animation selector
+     * ========================================================
+     */
+    if (selectingAlarmAnimation_)
+    {
+        if (selectedAlarm_ >= config.alarms.size())
+        {
+            selectingAlarmAnimation_ = false;
+
+            return SettingsAction::None;
+        }
+
+        const std::vector<std::string> animations =
+            getAlarmAnimations();
+
+        /*
+         * ----------------------------------------------------
+         * None
+         * ----------------------------------------------------
+         */
+        float animationY =
+            bounds.y + 75.0f;
+
+        SDL_FRect noneBounds{
+            bounds.x + 25.0f,
+            animationY - 5.0f,
+            bounds.w - 50.0f,
+            42.0f
+        };
+
+        if (pointInRect(
+                x,
+                y,
+                noneBounds))
+        {
+            /*
+             * Empty path represents "None".
+             */
+            selectedAlarmAnimation_.clear();
+
+            return SettingsAction::SelectAlarmAnimationItem;
+        }
+
+        animationY += 48.0f;
+
+        /*
+         * ----------------------------------------------------
+         * Animation folders
+         * ----------------------------------------------------
+         */
+        constexpr float ROW_HEIGHT = 48.0f;
+
+        for (const std::string& animation :
+             animations)
+        {
+            SDL_FRect animationBounds{
+                bounds.x + 25.0f,
+                animationY - 5.0f,
+                bounds.w - 50.0f,
+                42.0f
+            };
+
+            if (pointInRect(
+                    x,
+                    y,
+                    animationBounds))
+            {
+                selectedAlarmAnimation_ =
+                    animation;
+
+                return SettingsAction::SelectAlarmAnimationItem;
+            }
+
+            animationY += ROW_HEIGHT;
+        }
+
+        /*
+         * Back.
+         */
+        SDL_FRect backBounds{
+            bounds.x + bounds.w - 120.0f,
+            bounds.y + bounds.h - 55.0f,
+            90.0f,
+            35.0f
+        };
+
+        if (pointInRect(
+                x,
+                y,
+                backBounds))
+        {
+            selectingAlarmAnimation_ = false;
+
+            return SettingsAction::AlarmAnimationBack;
+        }
+
+        return SettingsAction::None;
+    }
+
+    /*
+     * ========================================================
      * Alarm editor
-     * =========================
+     * ========================================================
      */
     if (editingAlarm_)
     {
@@ -1199,7 +1630,7 @@ SettingsAction SettingsRenderer::getAction(
          * Alarm enabled.
          */
         const float enabledY =
-            bounds.y + 75.0f;
+            bounds.y + 65.0f;
 
         SDL_FRect enabledToggle{
             bounds.x + bounds.w - 105.0f,
@@ -1217,10 +1648,10 @@ SettingsAction SettingsRenderer::getAction(
         }
 
         /*
-         * Hour.
+         * Time.
          */
         const float timeY =
-            bounds.y + 125.0f;
+            bounds.y + 110.0f;
 
         SDL_FRect hourBounds{
             bounds.x + 150.0f,
@@ -1237,9 +1668,6 @@ SettingsAction SettingsRenderer::getAction(
             return SettingsAction::AdjustAlarmHour;
         }
 
-        /*
-         * Minute.
-         */
         SDL_FRect minuteBounds{
             bounds.x + 205.0f,
             timeY - 5.0f,
@@ -1255,9 +1683,6 @@ SettingsAction SettingsRenderer::getAction(
             return SettingsAction::AdjustAlarmMinute;
         }
 
-        /*
-         * AM / PM.
-         */
         SDL_FRect amPmBounds{
             bounds.x + 255.0f,
             timeY - 5.0f,
@@ -1277,13 +1702,13 @@ SettingsAction SettingsRenderer::getAction(
          * Repeat days.
          */
         const float repeatY =
-            bounds.y + 185.0f;
+            bounds.y + 165.0f;
 
         const float dayY =
-            repeatY + 35.0f;
+            repeatY + 30.0f;
 
-        constexpr float DAY_SIZE = 38.0f;
-        constexpr float DAY_GAP = 5.0f;
+        constexpr float DAY_SIZE = 36.0f;
+        constexpr float DAY_GAP = 4.0f;
 
         for (int day = 0; day < 7; ++day)
         {
@@ -1310,13 +1735,13 @@ SettingsAction SettingsRenderer::getAction(
          * Sound.
          */
         const float soundY =
-            dayY + 60.0f;
+            dayY + 50.0f;
 
         SDL_FRect soundBounds{
             bounds.x + 30.0f,
             soundY - 5.0f,
             bounds.w - 60.0f,
-            45.0f
+            40.0f
         };
 
         if (pointInRect(
@@ -1333,37 +1758,44 @@ SettingsAction SettingsRenderer::getAction(
         }
 
         /*
-         * Animation.
+         * ====================================================
+         * Animation selection
+         * ====================================================
          */
-        const float animationY =
-            soundY + 55.0f;
+        const float animationSelectY =
+            soundY + 42.0f;
 
-        SDL_FRect animationToggle{
-            bounds.x + bounds.w - 105.0f,
-            animationY - 4.0f,
-            70.0f,
-            32.0f
+        SDL_FRect animationSelectBounds{
+            bounds.x + 30.0f,
+            animationSelectY - 5.0f,
+            bounds.w - 60.0f,
+            40.0f
         };
 
         if (pointInRect(
                 x,
                 y,
-                animationToggle))
+                animationSelectBounds))
         {
-            return SettingsAction::ToggleAlarmAnimation;
+            selectedAlarmAnimation_ =
+                config.alarms[selectedAlarm_]
+                    .animationDirectory;
+
+            selectingAlarmAnimation_ = true;
+
+            return SettingsAction::SelectAlarmAnimation;
         }
 
         /*
-        * Delete.
-        */
-        const float deleteY =
-            animationY + 55.0f;
-
+         * ====================================================
+         * Delete
+         * ====================================================
+         */
         SDL_FRect deleteBounds{
-            bounds.x + 30.0f,
-            deleteY - 5.0f,
-            120.0f,
-            40.0f
+            bounds.x + 25.0f,
+            bounds.y + bounds.h - 55.0f,
+            90.0f,
+            35.0f
         };
 
         if (pointInRect(
@@ -1373,7 +1805,11 @@ SettingsAction SettingsRenderer::getAction(
         {
             editingAlarm_ = false;
             selectingAlarmSound_ = false;
+            selectingAlarmAnimation_ = false;
+
             selectedAlarmSound_.clear();
+            selectedAlarmAnimation_.clear();
+
             alarmScrollOffset_ = 0.0f;
 
             return SettingsAction::DeleteAlarm;
@@ -1403,88 +1839,58 @@ SettingsAction SettingsRenderer::getAction(
     }
 
     /*
-     * =========================
-     * Main settings
-     * =========================
+     * ========================================================
+     * Main Settings
+     * ========================================================
      */
 
-    /*
-     * Loop Music.
-     */
+    const float scrollTop =
+        bounds.y + 60.0f;
+
+    const float scrollBottom =
+        bounds.y + bounds.h - 65.0f;
+
+    SDL_FRect scrollBounds{
+        bounds.x,
+        scrollTop,
+        bounds.w,
+        scrollBottom - scrollTop
+    };
+
     const float firstRowY =
         bounds.y + 110.0f;
 
-    SDL_FRect loopToggle{
-        bounds.x + bounds.w - 105.0f,
-        firstRowY - 4.0f,
-        70.0f,
-        32.0f
-    };
-
-    if (pointInRect(
-            x,
-            y,
-            loopToggle))
-    {
-        return SettingsAction::ToggleMusicLoop;
-    }
-
-    /*
-     * Music Box Song.
-     */
     const float songY =
         firstRowY + ROW_HEIGHT;
 
-    SDL_FRect songBounds{
-        bounds.x + 30.0f,
-        songY - 5.0f,
-        bounds.w - 60.0f,
-        50.0f
-    };
-
-    if (pointInRect(
-            x,
-            y,
-            songBounds))
-    {
-        return SettingsAction::SelectMusicSong;
-    }
-
-    /*
-     * -------------------------
-     * Alarm list bounds
-     * -------------------------
-     */
     const float alarmsTitleY =
         songY + 65.0f;
 
-    SDL_FRect alarmListBounds{
-        bounds.x,
-        alarmsTitleY + 50.0f,
-        bounds.w,
-        (
-            bounds.y +
-            bounds.h -
-            85.0f
-        ) -
-        (
-            alarmsTitleY + 50.0f
-        )
-    };
+    const float alarmStartY =
+        alarmsTitleY + 50.0f;
 
-    /*
-     * Calculate scroll limits from
-     * the actual alarm list rectangle.
-     */
-    const float contentHeight =
+    const float addAlarmY =
+        alarmStartY +
         static_cast<float>(config.alarms.size()) *
-        ALARM_ROW_HEIGHT;
+            ALARM_ROW_HEIGHT +
+        10.0f;
+
+    const float debugY =
+        addAlarmY + 55.0f;
+
+    const float contentBottom =
+        debugY + 75.0f;
+
+    const float contentTop =
+        scrollTop;
+
+    const float contentHeight =
+        contentBottom - contentTop;
 
     const float maxScroll =
         std::max(
             0.0f,
-            contentHeight -
-                alarmListBounds.h);
+            contentHeight - scrollBounds.h);
 
     alarmScrollOffset_ =
         std::clamp(
@@ -1492,32 +1898,83 @@ SettingsAction SettingsRenderer::getAction(
             0.0f,
             maxScroll);
 
+    const float scrollOffset =
+        alarmScrollOffset_;
+
     /*
-     * Only process alarm clicks inside
-     * the alarm list rectangle.
+     * Music loop.
      */
+    const float visibleFirstRowY =
+        firstRowY - scrollOffset;
+
+    SDL_FRect loopToggle{
+        bounds.x + bounds.w - 105.0f,
+        visibleFirstRowY - 4.0f,
+        70.0f,
+        32.0f
+    };
+
     if (pointInRect(
             x,
             y,
-            alarmListBounds))
+            loopToggle) &&
+        pointInRect(
+            x,
+            y,
+            scrollBounds))
     {
-        const float alarmStartY =
-            alarmListBounds.y -
-            alarmScrollOffset_;
+        return SettingsAction::ToggleMusicLoop;
+    }
 
+    /*
+     * Music Box Song.
+     */
+    const float visibleSongY =
+        songY - scrollOffset;
+
+    SDL_FRect songBounds{
+        bounds.x + 30.0f,
+        visibleSongY - 5.0f,
+        bounds.w - 60.0f,
+        50.0f
+    };
+
+    if (pointInRect(
+            x,
+            y,
+            songBounds) &&
+        pointInRect(
+            x,
+            y,
+            scrollBounds))
+    {
+        return SettingsAction::SelectMusicSong;
+    }
+
+    /*
+     * Alarm rows.
+     */
+    const float visibleAlarmStartY =
+        alarmStartY - scrollOffset;
+
+    if (pointInRect(
+            x,
+            y,
+            scrollBounds))
+    {
         for (std::size_t i = 0;
              i < config.alarms.size();
              ++i)
         {
             const float alarmY =
-                alarmStartY +
+                visibleAlarmStartY +
                 static_cast<float>(i) *
                     ALARM_ROW_HEIGHT;
 
             SDL_FRect alarmBounds{
-                alarmListBounds.x + 30.0f,
+                bounds.x + 30.0f,
                 alarmY - 5.0f,
-                alarmListBounds.w - 60.0f,
+                bounds.w - 60.0f,
                 55.0f
             };
 
@@ -1533,28 +1990,59 @@ SettingsAction SettingsRenderer::getAction(
                 return SettingsAction::SelectAlarm;
             }
         }
+
+        /*
+         * Add Alarm.
+         */
+        const float visibleAddAlarmY =
+            addAlarmY - scrollOffset;
+
+        SDL_FRect addAlarmBounds{
+            bounds.x + 30.0f,
+            visibleAddAlarmY,
+            160.0f,
+            40.0f
+        };
+
+        if (pointInRect(
+                x,
+                y,
+                addAlarmBounds))
+        {
+            return SettingsAction::AddAlarm;
+        }
     }
 
-    /*
-     * Add Alarm.
-     */
-    SDL_FRect addAlarmBounds{
+   /*
+    * ========================================================
+    * Debug
+    * ========================================================
+    */
+
+    const float visibleDebugY =
+        debugY - scrollOffset;
+
+    SDL_FRect debugAnimationBounds{
         bounds.x + 30.0f,
-        bounds.y + bounds.h - 85.0f,
-        160.0f,
-        40.0f
+        visibleDebugY + 25.0f,
+        bounds.w - 60.0f,
+        50.0f
     };
 
     if (pointInRect(
             x,
             y,
-            addAlarmBounds))
+            debugAnimationBounds) &&
+        pointInRect(
+            x,
+            y,
+            scrollBounds))
     {
-        return SettingsAction::AddAlarm;
+        return SettingsAction::DebugShowAnimation;
     }
 
     /*
-     * Back.
+     * Fixed Back.
      */
     SDL_FRect backBounds{
         bounds.x + bounds.w - 120.0f,
@@ -1574,16 +2062,28 @@ SettingsAction SettingsRenderer::getAction(
     return SettingsAction::None;
 }
 
+// ============================================================
+// Scroll
+// ============================================================
+
 void SettingsRenderer::scrollAlarms(
     float amount)
 {
     alarmScrollOffset_ += amount;
 }
 
+// ============================================================
+// Selected alarm
+// ============================================================
+
 std::size_t SettingsRenderer::getSelectedAlarm() const
 {
     return selectedAlarm_;
 }
+
+// ============================================================
+// Alarm sound selection
+// ============================================================
 
 void SettingsRenderer::finishAlarmSoundSelection()
 {
@@ -1599,6 +2099,29 @@ std::string SettingsRenderer::getSelectedAlarmSound() const
 {
     return selectedAlarmSound_;
 }
+
+// ============================================================
+// Alarm animation selection
+// ============================================================
+
+void SettingsRenderer::finishAlarmAnimationSelection()
+{
+    selectingAlarmAnimation_ = false;
+}
+
+bool SettingsRenderer::isSelectingAlarmAnimation() const
+{
+    return selectingAlarmAnimation_;
+}
+
+std::string SettingsRenderer::getSelectedAlarmAnimation() const
+{
+    return selectedAlarmAnimation_;
+}
+
+// ============================================================
+// Selected day
+// ============================================================
 
 int SettingsRenderer::getSelectedDay() const
 {

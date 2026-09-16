@@ -112,9 +112,6 @@ constexpr SDL_FRect POCHACCO_BOUNDS = {
 constexpr const char* POCHACCO_PATH =
     "../assets/pochacco-green.png";
 
-constexpr const char* SIMBA_PATH =
-    "../assets/Simba.gif";
-
 constexpr const char* MORNING_PATH =
     "../assets/morning.jpg";
 
@@ -314,6 +311,7 @@ void handleSettingsAction(
     Settings& settings,
     SettingsRenderer& settingsRenderer,
     MusicManager& musicManager,
+    ClockManager& clockManager,
     AppMode& currentMode)
 {
     constexpr const char* SETTINGS_PATH = "../assets/settings/settings.json";
@@ -400,10 +398,12 @@ void handleSettingsAction(
             };
 
             newAlarm.playMusic = true;
-            newAlarm.showAnimation = true;
 
             newAlarm.soundPath =
                 "../assets/alarm/alarm.wav";
+
+            newAlarm.animationDirectory =
+                "../assets/animations/Simba";
 
             settings.get().alarms.push_back(
                 newAlarm);
@@ -554,25 +554,6 @@ void handleSettingsAction(
             break;
         }
 
-        case SettingsAction::ToggleAlarmAnimation:
-        {
-            auto& alarms =
-                settings.get().alarms;
-
-            const std::size_t index =
-                settingsRenderer.getSelectedAlarm();
-
-            if (index < alarms.size())
-            {
-                alarms[index].showAnimation =
-                    !alarms[index].showAnimation;
-            }
-
-            settings.save(SETTINGS_PATH);
-
-            break;
-        }
-
         case SettingsAction::SelectAlarmSound:
         {
             /*
@@ -603,6 +584,32 @@ void handleSettingsAction(
             break;
         }
 
+        case SettingsAction::SelectAlarmAnimation:
+            break;
+
+        case SettingsAction::SelectAlarmAnimationItem:
+        {
+            auto& alarms = settings.get().alarms;
+
+            const std::size_t index =
+                settingsRenderer.getSelectedAlarm();
+
+            if (index < alarms.size())
+            {
+                alarms[index].animationDirectory =
+                    settingsRenderer.getSelectedAlarmAnimation();
+            }
+
+            settingsRenderer.finishAlarmAnimationSelection();
+
+            settings.save(SETTINGS_PATH);
+
+            break;
+        }
+
+        case SettingsAction::AlarmAnimationBack:
+            break;
+
         case SettingsAction::DeleteAlarm:
         {
             auto& alarms =
@@ -617,6 +624,47 @@ void handleSettingsAction(
                     alarms.begin() + index);
 
                 settings.save(SETTINGS_PATH);
+            }
+
+            break;
+        }
+
+        case SettingsAction::DebugShowAnimation:
+        {
+            static std::size_t debugAnimationIndex = 0;
+
+            const ClockSettings& config = settings.get();
+
+            constexpr std::size_t animationCount =
+                std::tuple_size<decltype(config.animations)>::value;
+
+            for (std::size_t i = 0; i < animationCount; ++i)
+            {
+                const std::size_t index =
+                    (debugAnimationIndex + i) % animationCount;
+
+                const AnimationConfig& animation =
+                    config.animations[index];
+
+                if (!animation.enabled ||
+                    animation.directory.empty())
+                {
+                    continue;
+                }
+
+                SDL_Log(
+                    "DEBUG: Showing animation %zu: %s",
+                    index,
+                    animation.name.c_str());
+
+                clockManager
+                    .getAnimationManager()
+                    .showAnimation(index);
+
+                debugAnimationIndex =
+                    (index + 1) % animationCount;
+
+                break;
             }
 
             break;
@@ -1048,6 +1096,7 @@ int main(int argc, char* argv[])
                                 settings,
                                 settingsRenderer,
                                 musicManager,
+                                clockManager,
                                 currentMode);
                         }
 
@@ -1168,6 +1217,7 @@ int main(int argc, char* argv[])
                                 settings,
                                 settingsRenderer,
                                 musicManager,
+                                clockManager,
                                 currentMode);
                         }
 
@@ -1293,11 +1343,12 @@ int main(int argc, char* argv[])
                     // Alarm animation
                     // --------------------------------------------
 
-                    if (alarm.showAnimation)
+                    if (!alarm.animationDirectory.empty())
                     {
                         clockManager
                             .getAnimationManager()
-                            .showAnimation(0);
+                            .showAnimation(
+                                alarm.animationDirectory);
                     }
 
                     // --------------------------------------------

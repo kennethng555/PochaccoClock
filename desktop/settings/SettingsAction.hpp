@@ -17,11 +17,14 @@ enum class SettingsAction
     AdjustAlarmHour,
     AdjustAlarmMinute,
     ToggleAlarmAmPm,
-    ToggleAlarmAnimation,
     SelectAlarmSound,
     SelectAlarmSoundItem,
+    SelectAlarmAnimation,
+    SelectAlarmAnimationItem,
+    AlarmAnimationBack,
     ToggleAlarmDay,
     DeleteAlarm,
+    DebugShowAnimation,
 
     // Navigation
     Back,

@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <string>
+#include <vector>
 
 #include "Settings.hpp"
 #include "SettingsAction.hpp"
@@ -31,25 +32,76 @@ public:
         const Settings& settings);
 
     std::size_t getSelectedAlarm() const;
-    bool isSelectingAlarmSound() const;
-    std::string getSelectedAlarmSound() const;
-    void finishAlarmSoundSelection();
-    void updateAlarmScroll(
-      float delta);
 
-    void handleAlarmScrollStart(float y);
-    void handleAlarmScrollMove(float y);
+    /*
+     * --------------------------------------------------------
+     * Alarm sound selection
+     * --------------------------------------------------------
+     */
+    bool isSelectingAlarmSound() const;
+
+    std::string getSelectedAlarmSound() const;
+
+    void finishAlarmSoundSelection();
+
+    /*
+     * --------------------------------------------------------
+     * Alarm animation selection
+     * --------------------------------------------------------
+     */
+    bool isSelectingAlarmAnimation() const;
+
+    std::string getSelectedAlarmAnimation() const;
+
+    void finishAlarmAnimationSelection();
+
+    /*
+     * --------------------------------------------------------
+     * Scrolling
+     * --------------------------------------------------------
+     */
+    void updateAlarmScroll(
+        float delta);
+
+    void handleAlarmScrollStart(
+        float y);
+
+    void handleAlarmScrollMove(
+        float y);
+
     void handleAlarmScrollEnd();
-    void scrollAlarms(float amount);
+
+    void scrollAlarms(
+        float amount);
 
     int getSelectedDay() const;
 
 private:
+    /*
+     * --------------------------------------------------------
+     * Alarm sound selector
+     * --------------------------------------------------------
+     */
     void renderAlarmSoundSelector(
-      SDL_Renderer* renderer,
-      const SDL_FRect& bounds,
-      const AlarmConfig& alarm);
+        SDL_Renderer* renderer,
+        const SDL_FRect& bounds,
+        const AlarmConfig& alarm);
 
+    /*
+     * --------------------------------------------------------
+     * Alarm animation selector
+     * --------------------------------------------------------
+     */
+    void renderAlarmAnimationSelector(
+        SDL_Renderer* renderer,
+        const SDL_FRect& bounds,
+        const AlarmConfig& alarm);
+
+    /*
+     * --------------------------------------------------------
+     * Drawing helpers
+     * --------------------------------------------------------
+     */
     void drawText(
         SDL_Renderer* renderer,
         TTF_Font* font,
@@ -68,6 +120,11 @@ private:
         float y,
         const SDL_FRect& bounds) const;
 
+    /*
+     * --------------------------------------------------------
+     * Pages
+     * --------------------------------------------------------
+     */
     void renderMainSettings(
         SDL_Renderer* renderer,
         const SDL_FRect& bounds,
@@ -79,20 +136,61 @@ private:
         const AlarmConfig& alarm);
 
 private:
+    /*
+     * --------------------------------------------------------
+     * Fonts
+     * --------------------------------------------------------
+     */
     TTF_Font* titleFont_ = nullptr;
     TTF_Font* optionFont_ = nullptr;
     TTF_Font* smallFont_ = nullptr;
 
     bool initialized_ = false;
 
+    /*
+     * --------------------------------------------------------
+     * Alarm editor state
+     * --------------------------------------------------------
+     */
     mutable bool editingAlarm_ = false;
+
     mutable std::size_t selectedAlarm_ = 0;
+
     mutable int selectedDay_ = -1;
+
+    /*
+     * --------------------------------------------------------
+     * Alarm sound selection state
+     * --------------------------------------------------------
+     */
     bool selectingAlarmSound_ = false;
+
     std::string selectedAlarmSound_;
+
+    /*
+     * --------------------------------------------------------
+     * Alarm animation selection state
+     * --------------------------------------------------------
+     */
+    bool selectingAlarmAnimation_ = false;
+
+    std::string selectedAlarmAnimation_;
+
+    /*
+     * --------------------------------------------------------
+     * Settings scrolling
+     * --------------------------------------------------------
+     */
     float alarmScrollOffset_ = 0.0f;
 
+    /*
+     * --------------------------------------------------------
+     * Touch/drag scrolling
+     * --------------------------------------------------------
+     */
     bool alarmDragging_ = false;
+
     float alarmDragStartY_ = 0.0f;
+
     float alarmScrollStart_ = 0.0f;
 };

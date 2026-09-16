@@ -9,11 +9,12 @@
 #include <array>
 #include <cstddef>
 #include <random>
+#include <string>
 
 class AnimationManager
 {
 public:
-    static constexpr std::size_t ANIMATION_COUNT = 1;
+    static constexpr std::size_t ANIMATION_COUNT = 4;
 
     AnimationManager();
 
@@ -32,6 +33,9 @@ public:
     void showAnimation(
         std::size_t animationIndex);
 
+    void showAnimation(
+        const std::string& directory);
+
     void hideAnimation();
 
     bool isActive() const;
@@ -47,12 +51,9 @@ private:
     {
         AnimatedImage image;
 
-        SDL_FRect bounds{
-            5.0f,
-            325.0f,
-            150.0f,
-            112.5f
-        };
+        SDL_FRect bounds{};
+
+        std::string directory;
 
         bool loaded = false;
     };

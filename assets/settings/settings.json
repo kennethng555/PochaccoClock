@@ -1,23 +1,7 @@
 {
     "alarms": [
         {
-            "enabled": true,
-            "hour": 13,
-            "minute": 45,
-            "playMusic": true,
-            "repeatDays": [
-                true,
-                true,
-                true,
-                true,
-                true,
-                false,
-                false
-            ],
-            "showAnimation": true,
-            "soundPath": "../assets/alarm/alarm.wav"
-        },
-        {
+            "animationDirectory": "",
             "enabled": false,
             "hour": 7,
             "minute": 0,
@@ -31,10 +15,10 @@
                 false,
                 false
             ],
-            "showAnimation": true,
-            "soundPath": "../assets/alarm/alarm.wav"
+            "soundPath": "../assets/alarm/NextToYou.wav"
         },
         {
+            "animationDirectory": "../assets/animations/Simba",
             "enabled": false,
             "hour": 7,
             "minute": 0,
@@ -48,13 +32,29 @@
                 false,
                 false
             ],
-            "showAnimation": true,
+            "soundPath": "../assets/alarm/alarm.wav"
+        },
+        {
+            "animationDirectory": "../assets/animations/Simba",
+            "enabled": false,
+            "hour": 7,
+            "minute": 0,
+            "playMusic": true,
+            "repeatDays": [
+                true,
+                true,
+                true,
+                true,
+                true,
+                false,
+                false
+            ],
             "soundPath": "../assets/alarm/alarm.wav"
         }
     ],
     "animations": [
         {
-            "directory": "../assets/Simba",
+            "directory": "../assets/animations/Simba",
             "displayDuration": 30.0,
             "enabled": true,
             "endHour": 22,
@@ -68,26 +68,26 @@
             "scheduledMinute": 0,
             "startHour": 8,
             "width": 150.0,
-            "x": 5.0,
+            "x": 50.0,
             "y": 325.0
         },
         {
-            "directory": "",
+            "directory": "../assets/animations/Toto",
             "displayDuration": 30.0,
             "enabled": true,
             "endHour": 22,
-            "frameCount": 0,
+            "frameCount": 6,
             "frameDuration": 0.10000000149011612,
-            "height": 112.5,
-            "name": "",
+            "height": 200.0,
+            "name": "Toto",
             "randomEnabled": false,
-            "scheduled": false,
-            "scheduledHour": 0,
+            "scheduled": true,
+            "scheduledHour": 3,
             "scheduledMinute": 0,
             "startHour": 8,
-            "width": 150.0,
-            "x": 5.0,
-            "y": 325.0
+            "width": 122.5,
+            "x": 50.0,
+            "y": 250.0
         },
         {
             "directory": "",

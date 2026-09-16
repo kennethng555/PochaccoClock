@@ -29,10 +29,8 @@ struct AlarmConfig
     };
 
     bool playMusic = true;
-    bool showAnimation = true;
-
-    std::string soundPath =
-        "../assets/alarm/alarm.wav";
+    std::string soundPath = "../assets/alarm/alarm.wav";
+    std::string animationDirectory = "";
 
     /*
      * Runtime state.

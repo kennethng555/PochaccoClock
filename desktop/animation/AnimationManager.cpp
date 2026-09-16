@@ -23,19 +23,39 @@ bool AnimationManager::initialize(
 
     bool anyLoaded = false;
 
-    for (std::size_t i = 0; i < ANIMATION_COUNT; ++i) {
+    for (std::size_t i = 0; i < ANIMATION_COUNT; ++i)
+    {
         const AnimationConfig& config = settings.animations[i];
 
-        if (!config.enabled) {
+        animations_[i].loaded = false;
+        animations_[i].directory = config.directory;
+
+        if (!config.enabled)
+        {
             continue;
         }
 
-        if (config.frameCount == 0) {
+        if (config.frameCount == 0)
+        {
             continue;
         }
 
-        if (animations_[i].image.load(renderer, config.directory, config.frameCount)) {
+        if (config.directory.empty())
+        {
+            SDL_Log(
+                "AnimationManager: animation %zu has no directory",
+                i);
+
+            continue;
+        }
+
+        if (animations_[i].image.load(
+                renderer,
+                config.directory,
+                config.frameCount))
+        {
             animations_[i].loaded = true;
+
             animations_[i].bounds = {
                 config.x,
                 config.y,
@@ -43,9 +63,27 @@ bool AnimationManager::initialize(
                 config.height
             };
 
+            SDL_Log(
+                "AnimationManager: %s bounds = x=%f y=%f w=%f h=%f",
+                config.name.c_str(),
+                config.x,
+                config.y,
+                config.width,
+                config.height
+            );
+
             anyLoaded = true;
-        } else {
-            SDL_Log("AnimationManager: failed to load %s", config.name.c_str());
+
+            SDL_Log(
+                "AnimationManager: loaded animation %zu: %s",
+                i,
+                config.directory.c_str());
+        }
+        else
+        {
+            SDL_Log(
+                "AnimationManager: failed to load %s",
+                config.name.c_str());
         }
     }
 
@@ -157,6 +195,26 @@ void AnimationManager::showAnimation(
     displayTimer_ = 0.0f;
 
     active_ = true;
+}
+
+void AnimationManager::showAnimation(
+    const std::string& directory)
+{
+    if (directory.empty())
+        return;
+
+    for (std::size_t i = 0; i < animations_.size(); ++i)
+    {
+        if (animations_[i].directory == directory)
+        {
+            showAnimation(i);
+            return;
+        }
+    }
+
+    SDL_Log(
+        "AnimationManager: animation directory not found: %s",
+        directory.c_str());
 }
 
 void AnimationManager::hideAnimation()

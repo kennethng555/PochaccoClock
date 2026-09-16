@@ -49,10 +49,12 @@ void Settings::createDefaults()
     };
 
     defaultAlarm.playMusic = true;
-    defaultAlarm.showAnimation = true;
 
     defaultAlarm.soundPath =
         "../assets/alarm/alarm.wav";
+
+    defaultAlarm.animationDirectory =
+        "../assets/animations/Simba";
 
     defaultAlarm.triggeredToday = false;
 
@@ -65,6 +67,9 @@ void Settings::createDefaults()
      * --------------------------------------------------------
      */
 
+    /*
+     * Simba
+     */
     config_.animations[0].enabled = true;
     config_.animations[0].randomEnabled = false;
 
@@ -73,23 +78,48 @@ void Settings::createDefaults()
     config_.animations[0].scheduledMinute = 0;
 
     config_.animations[0].name = "Simba";
-    config_.animations[0].directory =
-        "../assets/Simba";
+    config_.animations[0].directory = "../assets/animations/Simba";
     config_.animations[0].frameCount = 8;
 
-    config_.animations[0].frameDuration =
-        0.10f;
-
-    config_.animations[0].displayDuration =
-        30.0f;
+    config_.animations[0].frameDuration = 0.10f;
+    config_.animations[0].displayDuration = 30.0f;
 
     config_.animations[0].startHour = 8;
     config_.animations[0].endHour = 22;
 
-    config_.animations[0].x = 5.0f;
+    config_.animations[0].x = 50.0f;
     config_.animations[0].y = 325.0f;
     config_.animations[0].width = 150.0f;
     config_.animations[0].height = 112.5f;
+
+    /*
+     * Toto
+     */
+    config_.animations[1].enabled = true;
+    config_.animations[1].randomEnabled = false;
+
+    config_.animations[1].scheduled = true;
+    config_.animations[1].scheduledHour = 3;
+    config_.animations[1].scheduledMinute = 0;
+
+    config_.animations[1].name = "Toto";
+    config_.animations[1].directory = "../assets/animations/Toto";
+    config_.animations[1].frameCount = 6;
+
+    config_.animations[1].frameDuration = 0.10f;
+    config_.animations[1].displayDuration = 30.0f;
+
+    config_.animations[1].startHour = 8;
+    config_.animations[1].endHour = 22;
+
+    config_.animations[1].x = 50.0f;
+    config_.animations[1].y = 250.0f;
+    config_.animations[1].width = 122.5f;
+    config_.animations[1].height = 200.0f;
+
+    /*
+     * Remaining animation slots keep AnimationConfig defaults.
+     */
 
     /*
      * --------------------------------------------------------
@@ -111,7 +141,7 @@ bool Settings::load(
     if (!file.is_open())
     {
         /*
-         * This is normal on the first launch.
+         * Normal on first launch.
          * Defaults remain active.
          */
         return false;
@@ -130,7 +160,8 @@ bool Settings::load(
 
         if (root.contains("music"))
         {
-            const json& music = root["music"];
+            const json& music =
+                root["music"];
 
             if (music.contains("songPath"))
             {
@@ -200,16 +231,24 @@ bool Settings::load(
                         item["playMusic"].get<bool>();
                 }
 
-                if (item.contains("showAnimation"))
-                {
-                    alarm.showAnimation =
-                        item["showAnimation"].get<bool>();
-                }
-
                 if (item.contains("soundPath"))
                 {
                     alarm.soundPath =
                         item["soundPath"].get<std::string>();
+                }
+
+                if (item.contains("animationDirectory"))
+                {
+                    alarm.animationDirectory =
+                        item["animationDirectory"].get<std::string>();
+                }
+                else
+                {
+                    /*
+                     * Backwards-compatible default.
+                     */
+                    alarm.animationDirectory =
+                        "../assets/animations/Simba";
                 }
 
                 /*
@@ -217,7 +256,8 @@ bool Settings::load(
                  */
                 alarm.triggeredToday = false;
 
-                config_.alarms.push_back(alarm);
+                config_.alarms.push_back(
+                    alarm);
             }
         }
 
@@ -238,7 +278,9 @@ bool Settings::load(
                  i < animations.size();
                  ++i)
             {
-                const json& item = animations[i];
+                const json& item =
+                    animations[i];
+
                 AnimationConfig& animation =
                     config_.animations[i];
 
@@ -314,6 +356,10 @@ bool Settings::load(
                         item["endHour"].get<int>();
                 }
 
+                /*
+                 * Animation bounds
+                 */
+
                 if (item.contains("x"))
                 {
                     animation.x =
@@ -388,7 +434,8 @@ bool Settings::save(
         for (const AlarmConfig& alarm :
              config_.alarms)
         {
-            json days = json::array();
+            json days =
+                json::array();
 
             for (bool day :
                  alarm.repeatDays)
@@ -402,8 +449,8 @@ bool Settings::save(
                 {"minute", alarm.minute},
                 {"repeatDays", days},
                 {"playMusic", alarm.playMusic},
-                {"showAnimation", alarm.showAnimation},
-                {"soundPath", alarm.soundPath}
+                {"soundPath", alarm.soundPath},
+                {"animationDirectory", alarm.animationDirectory}
             });
 
             /*
@@ -417,7 +464,8 @@ bool Settings::save(
          * ----------------------------------------------------
          */
 
-        root["animations"] = json::array();
+        root["animations"] =
+            json::array();
 
         for (const AnimationConfig& animation :
              config_.animations)
@@ -428,19 +476,35 @@ bool Settings::save(
                 {"scheduled", animation.scheduled},
                 {"scheduledHour", animation.scheduledHour},
                 {"scheduledMinute", animation.scheduledMinute},
+
                 {"name", animation.name},
                 {"directory", animation.directory},
                 {"frameCount", animation.frameCount},
-                {"frameDuration", animation.frameDuration},
-                {"displayDuration", animation.displayDuration},
+
+                {"frameDuration",
+                 animation.frameDuration},
+
+                {"displayDuration",
+                 animation.displayDuration},
+
                 {"startHour", animation.startHour},
                 {"endHour", animation.endHour},
+
+                /*
+                 * Animation bounds
+                 */
                 {"x", animation.x},
                 {"y", animation.y},
                 {"width", animation.width},
                 {"height", animation.height}
             });
         }
+
+        /*
+         * ----------------------------------------------------
+         * Write JSON
+         * ----------------------------------------------------
+         */
 
         std::ofstream file(path);
 
@@ -454,7 +518,8 @@ bool Settings::save(
             return false;
         }
 
-        file << root.dump(4) << '\n';
+        file << root.dump(4)
+             << '\n';
 
         return true;
     }
