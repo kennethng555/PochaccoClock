@@ -54,9 +54,6 @@ public:
     MusicPlayer& getMusicPlayer();
     const MusicPlayer& getMusicPlayer() const;
 
-    void playSound(
-        const std::string& path);
-
 private:
     // ========================================================
     // Rendering

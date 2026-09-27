@@ -61,18 +61,20 @@ add_subdirectory(
 add_executable(PochaccoClock
 
     src/main.cpp
+    animation/AnimatedImage.cpp
+    animation/AnimationManager.cpp
     clock/AnalogClockRenderer.cpp
     clock/DigitalClockRenderer.cpp
     clock/ClockManager.cpp
-    src/SDL3Display.cpp
-    animation/AnimatedImage.cpp
-    animation/AnimationManager.cpp
+    display/SDL3Display.cpp
+    rendering/SceneRenderer.cpp
     music/SpectrumAnalyzer.cpp
     music/MusicRenderer.cpp
     music/MusicManager.cpp
     music/MusicPlayer.cpp
     settings/Settings.cpp
     settings/SettingsRenderer.cpp
+    settings/SettingsActionHandler.cpp
 
     ../shared/Clock.cpp
 )

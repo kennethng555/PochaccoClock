@@ -14,6 +14,7 @@
 class AnimationManager
 {
 public:
+
     static constexpr std::size_t ANIMATION_COUNT = 4;
 
     AnimationManager();
@@ -29,6 +30,10 @@ public:
 
     void render(
         SDL_Renderer* renderer);
+
+    // ========================================================
+    // Normal animations
+    // ========================================================
 
     void showAnimation(
         std::size_t animationIndex);
@@ -46,7 +51,25 @@ public:
         const ClockSettings& settings,
         const ClockTime& time);
 
+    // ========================================================
+    // Birthday animation
+    // ========================================================
+
+    void startBirthday(
+        const BirthdaySettings& settings);
+
+    void stopBirthday();
+
+    void updateBirthday(
+        float deltaTime);
+
+    void renderBirthday(
+        SDL_Renderer* renderer);
+
+    bool isBirthdayActive() const;
+
 private:
+
     struct Animation
     {
         AnimatedImage image;
@@ -58,8 +81,10 @@ private:
         bool loaded = false;
     };
 
-    std::array<Animation, ANIMATION_COUNT>
-        animations_;
+    std::array<
+        Animation,
+        ANIMATION_COUNT
+    > animations_;
 
     std::size_t currentAnimation_ = 0;
 
@@ -84,5 +109,23 @@ private:
     void resetAppearanceTimer();
 
     int lastCheckedHour_ = -1;
+
     int lastCheckedMinute_ = -1;
+
+    // ========================================================
+    // Birthday animation
+    // ========================================================
+
+    AnimatedImage birthdayImage_;
+
+    SDL_FRect birthdayBounds_{
+        0.0f,
+        0.0f,
+        600.0f,
+        450.0f
+    };
+
+    bool birthdayLoaded_ = false;
+
+    bool birthdayActive_ = false;
 };

@@ -1252,6 +1252,10 @@ void MusicRenderer::handleTouch(
     if (!initialized)
         return;
 
+    // --------------------------------------------------------
+    // Progress bar
+    // --------------------------------------------------------
+
     const float currentY =
         bounds.y +
         SPECTRUM_HEIGHT +
@@ -1274,6 +1278,43 @@ void MusicRenderer::handleTouch(
             progressBounds);
 
         return;
+    }
+
+    // --------------------------------------------------------
+    // Playback controls
+    // --------------------------------------------------------
+
+    const MusicAction action =
+        getAction(
+            x,
+            y,
+            bounds);
+
+    switch (action)
+    {
+        case MusicAction::PlayPause:
+            musicPlayer.togglePlayPause();
+            break;
+
+        case MusicAction::Previous:
+            musicPlayer.previous();
+            break;
+
+        case MusicAction::Next:
+            musicPlayer.next();
+            break;
+
+        case MusicAction::ToggleLoop:
+            musicPlayer.toggleLooping();
+            break;
+
+        case MusicAction::ToggleShuffle:
+            musicPlayer.toggleShuffling();
+            break;
+
+        case MusicAction::None:
+        default:
+            break;
     }
 }
 

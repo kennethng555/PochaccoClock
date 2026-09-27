@@ -79,6 +79,24 @@ struct MusicSettings
     bool loop = true;
 };
 
+struct BirthdaySettings
+{
+    bool enabled = true;
+
+    int month = 9;
+    int day = 27;
+
+    std::string name = "Pochacco";
+
+    std::string animationDirectory =
+        "../assets/birthday/animation";
+
+    std::size_t frameCount = 3;
+
+    std::string musicPath =
+        "../assets/birthday/music/HappyBirthday.wav";
+};
+
 struct ClockSettings
 {
     std::vector<AlarmConfig> alarms;
@@ -86,6 +104,8 @@ struct ClockSettings
     std::array<AnimationConfig, 4> animations;
 
     MusicSettings music;
+
+    BirthdaySettings birthday;
 };
 
 class Settings

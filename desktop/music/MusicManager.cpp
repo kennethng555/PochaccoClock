@@ -1,102 +1,83 @@
 #include "MusicManager.hpp"
 
-bool MusicManager::initialize(
-    SDL_Renderer* sdlRenderer)
+#include <SDL3/SDL.h>
+
+bool MusicManager::initialize(SDL_Renderer* renderer)
 {
-    if (sdlRenderer == nullptr)
-        return false;
-
-    /*
-     * Initialize the full Music Player.
-     */
-    if (!renderer.initialize(
-            sdlRenderer,
-            "../assets/fonts/PinkyBlues.otf"))
+    if (!renderer)
     {
-        SDL_Log(
-            "Failed to initialize MusicRenderer");
-
+        SDL_Log("MusicManager: renderer is null");
         return false;
     }
 
-    /*
-     * Initialize the independent Music Box player.
-     */
-    if (!musicBoxPlayer.initialize())
+    if (!this->renderer.initialize(renderer, "../assets/fonts/PinkyBlues.otf"))
     {
-        SDL_Log(
-            "Failed to initialize Music Box player");
-
+        SDL_Log("MusicManager: failed to initialize MusicRenderer");
         return false;
     }
 
     initialized = true;
+
     musicBoxPlaying = false;
+    alarmPlaying = false;
+    alarmTimer = 0.0f;
+
+    birthdayPlaying = false;
+    birthdayMusicPath.clear();
+    normalMusicBoxPath.clear();
+    normalMusicBoxWasPlaying = false;
 
     return true;
 }
 
-void MusicManager::update(
-    float deltaTime)
+void MusicManager::update(float deltaTime)
 {
     if (!initialized)
         return;
 
     /*
-     * --------------------------------------------------------
-     * Alarm
-     * --------------------------------------------------------
+     * Alarm playback takes priority over everything else.
      */
-
     if (alarmPlaying)
     {
         alarmTimer += deltaTime;
 
         if (alarmTimer >= 30.0f)
         {
-            /*
-             * Stop the alarm.
-             */
-            musicBoxPlayer.stop();
-
             alarmPlaying = false;
             alarmTimer = 0.0f;
 
-            /*
-             * ------------------------------------------------
-             * Resume the normal Music Player.
-             * ------------------------------------------------
-             */
-            if (resumeMusicPlayerAfterAlarm)
-            {
-                MusicPlayer& player =
-                    renderer.getMusicPlayer();
-
-                player.play();
-            }
+            musicBoxPlayer.stop();
 
             /*
-             * ------------------------------------------------
-             * Resume the Music Box.
-             * ------------------------------------------------
-             *
-             * The current implementation reloads the song,
-             * so it resumes from the beginning.
+             * Birthday music has priority over the normal Music Box
+             * when birthday mode is still active.
              */
-            if (resumeMusicBoxAfterAlarm &&
-                !resumeMusicBoxPath.empty())
+            if (birthdayPlaying)
             {
-                if (musicBoxPlayer.load(
-                        resumeMusicBoxPath.c_str()))
+                if (!birthdayMusicPath.empty() &&
+                    musicBoxPlayer.load(birthdayMusicPath.c_str()))
                 {
+                    musicBoxPlayer.setLooping(true);
+                    musicBoxPlayer.play();
+                }
+            }
+            else if (resumeMusicBoxAfterAlarm &&
+                     !resumeMusicBoxPath.empty())
+            {
+                if (musicBoxPlayer.load(resumeMusicBoxPath.c_str()))
+                {
+                    musicBoxPlayer.setLooping(true);
                     musicBoxPlayer.play();
                     musicBoxPlaying = true;
                 }
             }
 
-            /*
-             * Clear saved alarm state.
-             */
+            if (resumeMusicPlayerAfterAlarm)
+            {
+                renderer.getMusicPlayer().play();
+            }
+
             resumeMusicPlayerAfterAlarm = false;
             resumeMusicBoxAfterAlarm = false;
             resumeMusicBoxPath.clear();
@@ -104,45 +85,33 @@ void MusicManager::update(
     }
 
     /*
-     * --------------------------------------------------------
-     * Update the full Music Player.
-     * --------------------------------------------------------
+     * Update the normal Music Renderer.
+     *
+     * This is independent from the Music Box player.
      */
-
     renderer.update();
 
     /*
-     * --------------------------------------------------------
-     * Update the independent Music Box player.
-     * --------------------------------------------------------
+     * Do not update/play normal Music Box state while an alarm
+     * or birthday song has priority.
      */
-
-    musicBoxPlayer.update();
-
-    /*
-     * Keep Music Box looping when it is supposed to be
-     * active.
-     *
-     * Do not do this while an alarm is playing.
-     */
-    if (!alarmPlaying &&
-        musicBoxPlaying &&
-        !musicBoxPlayer.isPlaying())
+    if (!alarmPlaying && !birthdayPlaying)
     {
-        musicBoxPlayer.play();
+        if (musicBoxPlaying)
+        {
+            musicBoxPlayer.update();
+        }
     }
 }
 
 void MusicManager::render(
-    SDL_Renderer* sdlRenderer,
+    SDL_Renderer* renderer,
     const SDL_FRect& bounds)
 {
     if (!initialized)
         return;
 
-    renderer.render(
-        sdlRenderer,
-        bounds);
+    this->renderer.render(renderer, bounds);
 }
 
 void MusicManager::handleTouch(
@@ -153,84 +122,7 @@ void MusicManager::handleTouch(
     if (!initialized)
         return;
 
-    const MusicAction action =
-        renderer.getAction(
-            x,
-            y,
-            bounds);
-
-    switch (action)
-    {
-        case MusicAction::PlayPause:
-            togglePlayPause();
-            return;
-
-        case MusicAction::Previous:
-        {
-            MusicPlayer& player =
-                renderer.getMusicPlayer();
-
-            /*
-             * Do not allow the full Music Player
-             * to start while Music Box is active.
-             */
-            if (musicBoxPlaying)
-                return;
-
-            player.previous();
-            return;
-        }
-
-        case MusicAction::Next:
-        {
-            MusicPlayer& player =
-                renderer.getMusicPlayer();
-
-            if (musicBoxPlaying)
-                return;
-
-            player.next();
-            return;
-        }
-
-        case MusicAction::ToggleLoop:
-        {
-            MusicPlayer& player =
-                renderer.getMusicPlayer();
-
-            if (musicBoxPlaying)
-                return;
-
-            player.toggleLooping();
-            return;
-        }
-
-        case MusicAction::ToggleShuffle:
-        {
-            MusicPlayer& player =
-                renderer.getMusicPlayer();
-
-            if (musicBoxPlaying)
-                return;
-
-            player.toggleShuffling();
-            return;
-        }
-
-        case MusicAction::None:
-        default:
-            break;
-    }
-
-    /*
-     * No music action was clicked.
-     * Let MusicRenderer handle things such as
-     * seeking on the progress bar.
-     */
-    renderer.handleTouch(
-        x,
-        y,
-        bounds);
+    this->renderer.handleTouch(x, y, bounds);
 }
 
 void MusicManager::handleMouseClick(
@@ -238,10 +130,10 @@ void MusicManager::handleMouseClick(
     float y,
     const SDL_FRect& bounds)
 {
-    handleTouch(
-        x,
-        y,
-        bounds);
+    if (!initialized)
+        return;
+
+    this->renderer.handleMouseClick(x, y, bounds);
 }
 
 void MusicManager::togglePlayPause()
@@ -249,34 +141,10 @@ void MusicManager::togglePlayPause()
     if (!initialized)
         return;
 
-    MusicPlayer& player =
-        renderer.getMusicPlayer();
-
-    /*
-     * If the normal Music Player is already playing,
-     * pause it.
-     */
-    if (player.isPlaying())
-    {
-        player.pause();
+    if (alarmPlaying)
         return;
-    }
 
-    /*
-     * Normal Music Player is about to start.
-     * Stop the Music Box first.
-     */
-    SDL_Log("musicBoxPlaying: %s", musicBoxPlaying ? "true" : "false");
-    if (musicBoxPlaying)
-    {
-        musicBoxPlayer.stop();
-        musicBoxPlaying = false;
-    }
-
-    /*
-     * Now start/resume the normal Music Player.
-     */
-    player.play();
+    renderer.getMusicPlayer().togglePlayPause();
 }
 
 bool MusicManager::isInitialized() const
@@ -301,12 +169,17 @@ void MusicManager::toggleMusicBox(
         return;
 
     /*
-     * Toggle OFF.
+     * Birthday music owns the Music Box while active.
      */
+    if (birthdayPlaying)
+        return;
+
+    if (alarmPlaying)
+        return;
+
     if (musicBoxPlaying)
     {
-        musicBoxPlayer.stop();
-        musicBoxPlaying = false;
+        stopMusicBox();
         return;
     }
 
@@ -318,25 +191,18 @@ void MusicManager::toggleMusicBox(
         return;
     }
 
-    MusicPlayer& player =
-        renderer.getMusicPlayer();
-
     /*
-     * Make sure the normal Music Player
-     * cannot play at the same time.
+     * Pause the normal music player while the
+     * Music Box is active.
      */
-    if (player.isPlaying())
+    if (renderer.getMusicPlayer().isPlaying())
     {
-        player.pause();
+        renderer.getMusicPlayer().pause();
     }
 
-    /*
-     * Start Music Box.
-     */
     musicBoxPlayer.stop();
 
-    if (!musicBoxPlayer.load(
-            songPath.c_str()))
+    if (!musicBoxPlayer.load(songPath.c_str()))
     {
         SDL_Log(
             "MusicManager: failed to load Music Box song: %s",
@@ -345,6 +211,7 @@ void MusicManager::toggleMusicBox(
         return;
     }
 
+    musicBoxPlayer.setLooping(true);
     musicBoxPlayer.play();
 
     musicBoxPlaying = true;
@@ -355,9 +222,6 @@ void MusicManager::stopMusicBox()
     if (!initialized)
         return;
 
-    if (!musicBoxPlaying)
-        return;
-
     musicBoxPlayer.stop();
 
     musicBoxPlaying = false;
@@ -365,7 +229,12 @@ void MusicManager::stopMusicBox()
 
 bool MusicManager::isMusicBoxPlaying() const
 {
-    return musicBoxPlaying;
+    /*
+     * The UI should consider the Music Box "on" while birthday
+     * music is playing because birthday music occupies the same
+     * Music Box playback channel.
+     */
+    return musicBoxPlaying || birthdayPlaying;
 }
 
 void MusicManager::setLooping(bool enabled)
@@ -373,62 +242,60 @@ void MusicManager::setLooping(bool enabled)
     if (!initialized)
         return;
 
-    MusicPlayer& player =
-        renderer.getMusicPlayer();
-
-    player.setLooping(enabled);
+    musicBoxPlayer.setLooping(enabled);
 }
 
 void MusicManager::playSound(
     const std::string& path,
-    const std::string& resumePath)
+    const std::string& resumeMusicBoxPath)
 {
     if (!initialized)
         return;
 
     if (path.empty())
     {
-        SDL_Log(
-            "MusicManager: alarm sound path is empty");
-
+        SDL_Log("MusicManager: alarm sound path is empty");
         return;
     }
 
-    MusicPlayer& player =
-        renderer.getMusicPlayer();
+    if (alarmPlaying)
+        return;
 
     /*
-     * Remember what was playing.
+     * Save the current normal music state.
      */
     resumeMusicPlayerAfterAlarm =
-        player.isPlaying();
+        renderer.getMusicPlayer().isPlaying();
 
+    /*
+     * Save the current Music Box state.
+     *
+     * Birthday music is handled separately. If birthday mode is
+     * active, the birthday song will automatically resume after
+     * the alarm.
+     */
     resumeMusicBoxAfterAlarm =
-        musicBoxPlaying;
+        musicBoxPlaying && !birthdayPlaying;
 
-    resumeMusicBoxPath =
-        resumePath;
+    this->resumeMusicBoxPath = resumeMusicBoxPath;
 
     /*
-     * Pause the normal Music Player.
+     * Pause normal music.
      */
-    if (resumeMusicPlayerAfterAlarm)
+    if (renderer.getMusicPlayer().isPlaying())
     {
-        player.pause();
+        renderer.getMusicPlayer().pause();
     }
 
     /*
-     * Stop the Music Box so that the alarm can
-     * use the Music Box player.
+     * Stop the Music Box playback temporarily.
      */
-    if (resumeMusicBoxAfterAlarm)
-    {
-        musicBoxPlayer.stop();
-        musicBoxPlaying = false;
-    }
+    musicBoxPlayer.stop();
+
+    musicBoxPlaying = false;
 
     /*
-     * Load the alarm.
+     * Alarm takes over the Music Box player.
      */
     if (!musicBoxPlayer.load(path.c_str()))
     {
@@ -438,20 +305,139 @@ void MusicManager::playSound(
 
         resumeMusicPlayerAfterAlarm = false;
         resumeMusicBoxAfterAlarm = false;
-        resumeMusicBoxPath.clear();
-
-        alarmPlaying = false;
+        this->resumeMusicBoxPath.clear();
 
         return;
     }
 
-    /*
-     * Keep the alarm playing until the alarm timer
-     * expires.
-     */
     musicBoxPlayer.setLooping(true);
     musicBoxPlayer.play();
 
     alarmPlaying = true;
     alarmTimer = 0.0f;
+}
+
+void MusicManager::startBirthdayMusic(
+    const std::string& birthdayPath,
+    const std::string& normalMusicBoxPath)
+{
+    if (!initialized)
+        return;
+
+    if (alarmPlaying)
+        return;
+
+    if (birthdayPlaying)
+        return;
+
+    if (birthdayPath.empty())
+    {
+        SDL_Log("MusicManager: birthday music path is empty");
+        return;
+    }
+
+    /*
+     * Remember the normal Music Box configuration so it can be
+     * restored when the birthday date ends.
+     */
+    this->normalMusicBoxPath = normalMusicBoxPath;
+    this->normalMusicBoxWasPlaying = musicBoxPlaying;
+
+    birthdayMusicPath = birthdayPath;
+
+    /*
+     * Stop the normal Music Box.
+     */
+    musicBoxPlayer.stop();
+    musicBoxPlaying = false;
+
+    /*
+     * Pause normal music while the birthday song is playing.
+     */
+    if (renderer.getMusicPlayer().isPlaying())
+    {
+        renderer.getMusicPlayer().pause();
+    }
+
+    /*
+     * Load the birthday song into the same Music Box player.
+     */
+    if (!musicBoxPlayer.load(birthdayPath.c_str()))
+    {
+        SDL_Log(
+            "MusicManager: failed to load birthday music: %s",
+            birthdayPath.c_str());
+
+        birthdayMusicPath.clear();
+        this->normalMusicBoxPath.clear();
+        normalMusicBoxWasPlaying = false;
+
+        return;
+    }
+
+    musicBoxPlayer.setLooping(true);
+    musicBoxPlayer.play();
+
+    birthdayPlaying = true;
+
+    SDL_Log(
+        "MusicManager: birthday music started: %s",
+        birthdayPath.c_str());
+}
+
+void MusicManager::stopBirthdayMusic()
+{
+    if (!initialized)
+        return;
+
+    if (!birthdayPlaying)
+        return;
+
+    /*
+     * Stop the birthday song.
+     */
+    musicBoxPlayer.stop();
+
+    birthdayPlaying = false;
+
+    /*
+     * Restore the normal Music Box only if it was playing when
+     * birthday mode began.
+     */
+    if (normalMusicBoxWasPlaying &&
+        !normalMusicBoxPath.empty())
+    {
+        if (musicBoxPlayer.load(normalMusicBoxPath.c_str()))
+        {
+            musicBoxPlayer.setLooping(true);
+            musicBoxPlayer.play();
+
+            musicBoxPlaying = true;
+
+            SDL_Log(
+                "MusicManager: restored normal Music Box: %s",
+                normalMusicBoxPath.c_str());
+        }
+        else
+        {
+            SDL_Log(
+                "MusicManager: failed to restore normal Music Box: %s",
+                normalMusicBoxPath.c_str());
+
+            musicBoxPlaying = false;
+        }
+    }
+    else
+    {
+        musicBoxPlaying = false;
+    }
+
+    birthdayMusicPath.clear();
+    normalMusicBoxPath.clear();
+    normalMusicBoxWasPlaying = false;
+}
+
+bool MusicManager::isBirthdayMusicPlaying() const
+{
+    return birthdayPlaying;
 }

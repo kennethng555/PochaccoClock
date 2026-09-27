@@ -25,6 +25,25 @@ const ClockSettings& Settings::get() const
 void Settings::createDefaults()
 {
     /*
+    * --------------------------------------------------------
+    * Birthday
+    * --------------------------------------------------------
+    */
+
+    config_.birthday.enabled = false;
+    config_.birthday.month = 1;
+    config_.birthday.day = 1;
+    config_.birthday.name = "Pochacco";
+
+    config_.birthday.animationDirectory =
+        "../assets/animations/Birthday";
+
+    config_.birthday.frameCount = 20;
+
+    config_.birthday.musicPath =
+        "../assets/music/HappyBirthday.wav";
+
+    /*
      * --------------------------------------------------------
      * Alarms
      * --------------------------------------------------------
@@ -49,17 +68,11 @@ void Settings::createDefaults()
     };
 
     defaultAlarm.playMusic = true;
-
-    defaultAlarm.soundPath =
-        "../assets/alarm/alarm.wav";
-
-    defaultAlarm.animationDirectory =
-        "../assets/animations/Simba";
-
+    defaultAlarm.soundPath = "../assets/alarm/alarm.wav";
+    defaultAlarm.animationDirectory = "";
     defaultAlarm.triggeredToday = false;
 
-    config_.alarms.push_back(
-        defaultAlarm);
+    config_.alarms.push_back(defaultAlarm);
 
     /*
      * --------------------------------------------------------
@@ -127,9 +140,7 @@ void Settings::createDefaults()
      * --------------------------------------------------------
      */
 
-    config_.music.songPath =
-        "../assets/music/NextToYou.wav";
-
+    config_.music.songPath = "../assets/music/NextToYou.wav";
     config_.music.loop = true;
 }
 
@@ -140,10 +151,6 @@ bool Settings::load(
 
     if (!file.is_open())
     {
-        /*
-         * Normal on first launch.
-         * Defaults remain active.
-         */
         return false;
     }
 
@@ -153,26 +160,65 @@ bool Settings::load(
         file >> root;
 
         /*
+        * ----------------------------------------------------
+        * Birthday
+        * ----------------------------------------------------
+        */
+
+        if (root.contains("birthday")) {
+            const json& birthday = root["birthday"];
+
+            if (birthday.contains("enabled")) {
+                config_.birthday.enabled =
+                    birthday["enabled"].get<bool>();
+            }
+
+            if (birthday.contains("month")) {
+                config_.birthday.month =
+                    birthday["month"].get<int>();
+            }
+
+            if (birthday.contains("day")) {
+                config_.birthday.day =
+                    birthday["day"].get<int>();
+            }
+
+            if (birthday.contains("name")) {
+                config_.birthday.name =
+                    birthday["name"].get<std::string>();
+            }
+
+            if (birthday.contains("animationDirectory")) {
+                config_.birthday.animationDirectory =
+                    birthday["animationDirectory"].get<std::string>();
+            }
+
+            if (birthday.contains("frameCount")) {
+                config_.birthday.frameCount =
+                    birthday["frameCount"].get<std::size_t>();
+            }
+
+            if (birthday.contains("musicPath")) {
+                config_.birthday.musicPath =
+                    birthday["musicPath"].get<std::string>();
+            }
+        }
+
+        /*
          * ----------------------------------------------------
          * Music
          * ----------------------------------------------------
          */
 
-        if (root.contains("music"))
-        {
-            const json& music =
-                root["music"];
+        if (root.contains("music")) {
+            const json& music = root["music"];
 
-            if (music.contains("songPath"))
-            {
-                config_.music.songPath =
-                    music["songPath"].get<std::string>();
+            if (music.contains("songPath")) {
+                config_.music.songPath = music["songPath"].get<std::string>();
             }
 
-            if (music.contains("loop"))
-            {
-                config_.music.loop =
-                    music["loop"].get<bool>();
+            if (music.contains("loop")) {
+                config_.music.loop = music["loop"].get<bool>();
             }
         }
 
@@ -182,73 +228,47 @@ bool Settings::load(
          * ----------------------------------------------------
          */
 
-        if (root.contains("alarms") &&
-            root["alarms"].is_array())
-        {
+        if (root.contains("alarms") && root["alarms"].is_array()) {
             config_.alarms.clear();
 
-            for (const json& item :
-                 root["alarms"])
-            {
+            for (const json& item : root["alarms"]) {
                 AlarmConfig alarm;
 
-                if (item.contains("enabled"))
-                {
-                    alarm.enabled =
-                        item["enabled"].get<bool>();
+                if (item.contains("enabled")) {
+                    alarm.enabled = item["enabled"].get<bool>();
                 }
 
-                if (item.contains("hour"))
-                {
-                    alarm.hour =
-                        item["hour"].get<int>();
+                if (item.contains("hour")) {
+                    alarm.hour = item["hour"].get<int>();
                 }
 
-                if (item.contains("minute"))
-                {
-                    alarm.minute =
-                        item["minute"].get<int>();
+                if (item.contains("minute")) {
+                    alarm.minute = item["minute"].get<int>();
                 }
 
-                if (item.contains("repeatDays") &&
-                    item["repeatDays"].is_array())
+                if (item.contains("repeatDays") && item["repeatDays"].is_array())
                 {
-                    const json& days =
-                        item["repeatDays"];
+                    const json& days = item["repeatDays"];
 
-                    for (std::size_t i = 0;
-                         i < 7 && i < days.size();
-                         ++i)
-                    {
-                        alarm.repeatDays[i] =
-                            days[i].get<bool>();
+                    for (std::size_t i = 0; i < 7 && i < days.size(); ++i) {
+                        alarm.repeatDays[i] = days[i].get<bool>();
                     }
                 }
 
-                if (item.contains("playMusic"))
-                {
-                    alarm.playMusic =
-                        item["playMusic"].get<bool>();
+                if (item.contains("playMusic")) {
+                    alarm.playMusic = item["playMusic"].get<bool>();
                 }
 
-                if (item.contains("soundPath"))
-                {
-                    alarm.soundPath =
-                        item["soundPath"].get<std::string>();
+                if (item.contains("soundPath")) {
+                    alarm.soundPath = item["soundPath"].get<std::string>();
                 }
 
-                if (item.contains("animationDirectory"))
-                {
-                    alarm.animationDirectory =
-                        item["animationDirectory"].get<std::string>();
+                if (item.contains("animationDirectory")) {
+                    alarm.animationDirectory = item["animationDirectory"].get<std::string>();
                 }
                 else
                 {
-                    /*
-                     * Backwards-compatible default.
-                     */
-                    alarm.animationDirectory =
-                        "../assets/animations/Simba";
+                    alarm.animationDirectory = "";
                 }
 
                 /*
@@ -256,8 +276,7 @@ bool Settings::load(
                  */
                 alarm.triggeredToday = false;
 
-                config_.alarms.push_back(
-                    alarm);
+                config_.alarms.push_back(alarm);
             }
         }
 
@@ -267,121 +286,80 @@ bool Settings::load(
          * ----------------------------------------------------
          */
 
-        if (root.contains("animations") &&
-            root["animations"].is_array())
-        {
-            const json& animations =
-                root["animations"];
+        if (root.contains("animations") && root["animations"].is_array()) {
+            const json& animations = root["animations"];
 
-            for (std::size_t i = 0;
-                 i < config_.animations.size() &&
-                 i < animations.size();
-                 ++i)
-            {
-                const json& item =
-                    animations[i];
+            for (std::size_t i = 0; i < config_.animations.size() && i < animations.size(); ++i) {
+                const json& item = animations[i];
 
-                AnimationConfig& animation =
-                    config_.animations[i];
+                AnimationConfig& animation = config_.animations[i];
 
-                if (item.contains("enabled"))
-                {
-                    animation.enabled =
-                        item["enabled"].get<bool>();
+                if (item.contains("enabled")) {
+                    animation.enabled = item["enabled"].get<bool>();
                 }
 
-                if (item.contains("randomEnabled"))
-                {
-                    animation.randomEnabled =
-                        item["randomEnabled"].get<bool>();
+                if (item.contains("randomEnabled")) {
+                    animation.randomEnabled = item["randomEnabled"].get<bool>();
                 }
 
-                if (item.contains("scheduled"))
-                {
-                    animation.scheduled =
-                        item["scheduled"].get<bool>();
+                if (item.contains("scheduled")) {
+                    animation.scheduled = item["scheduled"].get<bool>();
                 }
 
-                if (item.contains("scheduledHour"))
-                {
-                    animation.scheduledHour =
-                        item["scheduledHour"].get<int>();
+                if (item.contains("scheduledHour")) {
+                    animation.scheduledHour = item["scheduledHour"].get<int>();
                 }
 
-                if (item.contains("scheduledMinute"))
-                {
-                    animation.scheduledMinute =
-                        item["scheduledMinute"].get<int>();
+                if (item.contains("scheduledMinute")) {
+                    animation.scheduledMinute = item["scheduledMinute"].get<int>();
                 }
 
-                if (item.contains("name"))
-                {
-                    animation.name =
-                        item["name"].get<std::string>();
+                if (item.contains("name")) {
+                    animation.name = item["name"].get<std::string>();
                 }
 
-                if (item.contains("directory"))
-                {
-                    animation.directory =
-                        item["directory"].get<std::string>();
+                if (item.contains("directory")) {
+                    animation.directory = item["directory"].get<std::string>();
                 }
 
-                if (item.contains("frameCount"))
-                {
-                    animation.frameCount =
-                        item["frameCount"].get<std::size_t>();
+                if (item.contains("frameCount")) {
+                    animation.frameCount = item["frameCount"].get<std::size_t>();
                 }
 
-                if (item.contains("frameDuration"))
-                {
-                    animation.frameDuration =
-                        item["frameDuration"].get<float>();
+                if (item.contains("frameDuration")) {
+                    animation.frameDuration = item["frameDuration"].get<float>();
                 }
 
-                if (item.contains("displayDuration"))
-                {
-                    animation.displayDuration =
-                        item["displayDuration"].get<float>();
+                if (item.contains("displayDuration")) {
+                    animation.displayDuration = item["displayDuration"].get<float>();
                 }
 
-                if (item.contains("startHour"))
-                {
-                    animation.startHour =
-                        item["startHour"].get<int>();
+                if (item.contains("startHour")) {
+                    animation.startHour = item["startHour"].get<int>();
                 }
 
-                if (item.contains("endHour"))
-                {
-                    animation.endHour =
-                        item["endHour"].get<int>();
+                if (item.contains("endHour")) {
+                    animation.endHour = item["endHour"].get<int>();
                 }
 
                 /*
                  * Animation bounds
                  */
 
-                if (item.contains("x"))
-                {
-                    animation.x =
-                        item["x"].get<float>();
+                if (item.contains("x")) {
+                    animation.x = item["x"].get<float>();
                 }
 
-                if (item.contains("y"))
-                {
-                    animation.y =
-                        item["y"].get<float>();
+                if (item.contains("y")) {
+                    animation.y = item["y"].get<float>();
                 }
 
-                if (item.contains("width"))
-                {
-                    animation.width =
-                        item["width"].get<float>();
+                if (item.contains("width")) {
+                    animation.width = item["width"].get<float>();
                 }
 
-                if (item.contains("height"))
-                {
-                    animation.height =
-                        item["height"].get<float>();
+                if (item.contains("height")) {
+                    animation.height = item["height"].get<float>();
                 }
             }
         }
@@ -390,17 +368,7 @@ bool Settings::load(
     }
     catch (const json::exception& e)
     {
-        std::cerr
-            << "Settings: failed to parse "
-            << path
-            << ": "
-            << e.what()
-            << '\n';
-
-        /*
-         * Keep whatever defaults/partially loaded values
-         * we had rather than crashing the application.
-         */
+        std::cerr << "Settings: failed to parse " << path << ": " << e.what() << '\n';
         return false;
     }
 }
@@ -459,6 +427,25 @@ bool Settings::save(
         }
 
         /*
+        * ----------------------------------------------------
+        * Birthday
+        * ----------------------------------------------------
+        */
+
+        root["birthday"] = {
+            {"enabled", config_.birthday.enabled},
+            {"month", config_.birthday.month},
+            {"day", config_.birthday.day},
+            {"name", config_.birthday.name},
+            {"animationDirectory",
+            config_.birthday.animationDirectory},
+            {"frameCount",
+            config_.birthday.frameCount},
+            {"musicPath",
+            config_.birthday.musicPath}
+        };
+
+        /*
          * ----------------------------------------------------
          * Animations
          * ----------------------------------------------------
@@ -508,30 +495,16 @@ bool Settings::save(
 
         std::ofstream file(path);
 
-        if (!file.is_open())
-        {
-            std::cerr
-                << "Settings: failed to open "
-                << path
-                << " for writing\n";
-
+        if (!file.is_open()) {
+            std::cerr << "Settings: failed to open " << path << " for writing\n";
             return false;
         }
 
-        file << root.dump(4)
-             << '\n';
+        file << root.dump(4) << '\n';
 
         return true;
-    }
-    catch (const json::exception& e)
-    {
-        std::cerr
-            << "Settings: failed to save "
-            << path
-            << ": "
-            << e.what()
-            << '\n';
-
+    } catch (const json::exception& e) {
+        std::cerr << "Settings: failed to save " << path << ": " << e.what() << '\n';
         return false;
     }
 }

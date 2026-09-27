@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+
 #include <SDL3/SDL.h>
 
 #include "MusicRenderer.hpp"
@@ -36,9 +37,7 @@ public:
     MusicPlayer& getMusicPlayer();
     const MusicPlayer& getMusicPlayer() const;
 
-    void toggleMusicBox(
-        const std::string& songPath);
-
+    void toggleMusicBox(const std::string& songPath);
     void stopMusicBox();
 
     bool isMusicBoxPlaying() const;
@@ -49,20 +48,36 @@ public:
         const std::string& path,
         const std::string& resumeMusicBoxPath);
 
+    // Birthday music
+    void startBirthdayMusic(
+        const std::string& birthdayPath,
+        const std::string& normalMusicBoxPath);
+
+    void stopBirthdayMusic();
+
+    bool isBirthdayMusicPlaying() const;
+
 private:
     MusicRenderer renderer;
-
     MusicPlayer musicBoxPlayer;
 
     bool initialized = false;
 
     bool musicBoxPlaying = false;
-
     bool alarmPlaying = false;
+
     float alarmTimer = 0.0f;
 
     bool resumeMusicPlayerAfterAlarm = false;
     bool resumeMusicBoxAfterAlarm = false;
 
     std::string resumeMusicBoxPath;
+
+    // Birthday music state
+    bool birthdayPlaying = false;
+
+    std::string birthdayMusicPath;
+
+    std::string normalMusicBoxPath;
+    bool normalMusicBoxWasPlaying = false;
 };

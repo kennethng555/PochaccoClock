@@ -1,14 +1,14 @@
 #include "AnimationManager.hpp"
 
+#include <algorithm>
 #include <chrono>
 
 AnimationManager::AnimationManager()
-    : randomEngine_(
-          static_cast<std::mt19937::result_type>(
-              std::chrono::steady_clock::now()
-                  .time_since_epoch()
-                  .count()))
 {
+    std::random_device rd;
+
+    randomEngine_.seed(rd());
+
     resetAppearanceTimer();
 }
 
@@ -17,96 +17,111 @@ bool AnimationManager::initialize(
     const ClockSettings& settings)
 {
     if (renderer == nullptr)
-    {
         return false;
-    }
 
-    bool anyLoaded = false;
+    // ========================================================
+    // Normal animations
+    // ========================================================
 
-    for (std::size_t i = 0; i < ANIMATION_COUNT; ++i)
+    for (std::size_t i = 0;
+         i < ANIMATION_COUNT;
+         ++i)
     {
-        const AnimationConfig& config = settings.animations[i];
+        Animation& animation =
+            animations_[i];
 
-        animations_[i].loaded = false;
-        animations_[i].directory = config.directory;
+        animation.loaded = false;
+        animation.directory.clear();
+
+        const AnimationConfig& config =
+            settings.animations[i];
+
+        animation.bounds = SDL_FRect{
+            config.x,
+            config.y,
+            config.width,
+            config.height
+        };
+
+        animation.directory =
+            config.directory;
 
         if (!config.enabled)
-        {
             continue;
-        }
-
-        if (config.frameCount == 0)
-        {
-            continue;
-        }
 
         if (config.directory.empty())
-        {
-            SDL_Log(
-                "AnimationManager: animation %zu has no directory",
-                i);
-
             continue;
-        }
 
-        if (animations_[i].image.load(
+        if (config.frameCount == 0)
+            continue;
+
+        if (animation.image.load(
                 renderer,
                 config.directory,
                 config.frameCount))
         {
-            animations_[i].loaded = true;
-
-            animations_[i].bounds = {
-                config.x,
-                config.y,
-                config.width,
-                config.height
-            };
-
-            SDL_Log(
-                "AnimationManager: %s bounds = x=%f y=%f w=%f h=%f",
-                config.name.c_str(),
-                config.x,
-                config.y,
-                config.width,
-                config.height
-            );
-
-            anyLoaded = true;
+            animation.loaded = true;
 
             SDL_Log(
                 "AnimationManager: loaded animation %zu: %s",
                 i,
-                config.directory.c_str());
+                config.name.c_str());
         }
         else
         {
             SDL_Log(
-                "AnimationManager: failed to load %s",
+                "AnimationManager: failed to load animation %zu: %s",
+                i,
                 config.name.c_str());
         }
     }
 
-    return anyLoaded;
+    // ========================================================
+    // Birthday animation
+    // ========================================================
+
+    birthdayLoaded_ = false;
+    birthdayActive_ = false;
+
+    /*
+     * Birthday is deliberately NOT part of the four normal
+     * animation slots.
+     */
+    if (!settings.birthday.animationDirectory.empty() &&
+        settings.birthday.frameCount > 0)
+    {
+        if (birthdayImage_.load(
+                renderer,
+                settings.birthday.animationDirectory,
+                settings.birthday.frameCount))
+        {
+            birthdayLoaded_ = true;
+
+            SDL_Log(
+                "AnimationManager: loaded birthday animation: %s",
+                settings.birthday.animationDirectory.c_str());
+        }
+        else
+        {
+            SDL_Log(
+                "AnimationManager: failed to load birthday animation");
+        }
+    }
+
+    return true;
 }
+
+// ============================================================
+// Normal animation update
+// ============================================================
 
 void AnimationManager::update(
     float deltaTime,
     const ClockSettings& settings,
     const ClockTime& time)
 {
-    if (deltaTime <= 0.0f)
-    {
-        return;
-    }
-
-    /*
-     * Currently displaying an animation.
-     */
     if (active_)
     {
-        displayTimer_ += deltaTime;
-
         if (currentAnimation_ < ANIMATION_COUNT)
         {
             Animation& animation =
@@ -114,83 +129,83 @@ void AnimationManager::update(
 
             if (animation.loaded)
             {
-                animation.image.update(
-                    deltaTime);
+                animation.image.update(deltaTime);
             }
 
-            const float duration =
-                settings
-                    .animations[currentAnimation_]
-                    .displayDuration;
+            displayTimer_ += deltaTime;
 
-            if (displayTimer_ >= duration)
+            const float displayDuration =
+                settings.animations[
+                    currentAnimation_
+                ].displayDuration;
+
+            if (displayDuration > 0.0f &&
+                displayTimer_ >= displayDuration)
             {
                 hideAnimation();
             }
         }
-
-        return;
     }
-
-    /*
-     * Scheduled animations have priority over
-     * random animations.
-     */
-    if (checkScheduledAnimations(
-            settings,
-            time))
+    else
     {
-        return;
+        nextAppearanceTimer_ -= deltaTime;
+
+        if (nextAppearanceTimer_ <= 0.0f)
+        {
+            startRandomAnimation(settings);
+            resetAppearanceTimer();
+        }
     }
 
-    /*
-     * No scheduled animation was triggered,
-     * so random animation behavior can proceed.
-     */
-    nextAppearanceTimer_ -= deltaTime;
-
-    if (nextAppearanceTimer_ > 0.0f)
-    {
-        return;
-    }
-
-    startRandomAnimation(settings);
+    checkScheduledAnimations(
+        settings,
+        time);
 }
+
+// ============================================================
+// Normal animation render
+// ============================================================
 
 void AnimationManager::render(
     SDL_Renderer* renderer)
 {
-    if (renderer == nullptr || !active_) {
+    if (!active_)
         return;
-    }
 
-    if (currentAnimation_ >= ANIMATION_COUNT) {
+    if (currentAnimation_ >= ANIMATION_COUNT)
         return;
-    }
 
-    Animation& animation = animations_[currentAnimation_];
+    Animation& animation =
+        animations_[currentAnimation_];
 
-    if (!animation.loaded) {
+    if (!animation.loaded)
         return;
-    }
 
-    animation.image.render(renderer, animation.bounds);
+    animation.image.render(
+        renderer,
+        animation.bounds);
 }
+
+// ============================================================
+// Show normal animation
+// ============================================================
 
 void AnimationManager::showAnimation(
     std::size_t animationIndex)
 {
-    if (animationIndex >= ANIMATION_COUNT) {
+    if (animationIndex >= ANIMATION_COUNT)
         return;
-    }
 
-    if (!animations_[animationIndex].loaded) {
+    Animation& animation =
+        animations_[animationIndex];
+
+    if (!animation.loaded)
         return;
-    }
 
-    currentAnimation_ = animationIndex;
+    currentAnimation_ =
+        animationIndex;
 
-    animations_[currentAnimation_].image.reset();
+    animation.image.reset();
 
     displayTimer_ = 0.0f;
 
@@ -200,10 +215,9 @@ void AnimationManager::showAnimation(
 void AnimationManager::showAnimation(
     const std::string& directory)
 {
-    if (directory.empty())
-        return;
-
-    for (std::size_t i = 0; i < animations_.size(); ++i)
+    for (std::size_t i = 0;
+         i < ANIMATION_COUNT;
+         ++i)
     {
         if (animations_[i].directory == directory)
         {
@@ -211,10 +225,6 @@ void AnimationManager::showAnimation(
             return;
         }
     }
-
-    SDL_Log(
-        "AnimationManager: animation directory not found: %s",
-        directory.c_str());
 }
 
 void AnimationManager::hideAnimation()
@@ -236,84 +246,92 @@ std::size_t AnimationManager::getCurrentAnimation() const
     return currentAnimation_;
 }
 
+// ============================================================
+// Birthday animation
+// ============================================================
+
+void AnimationManager::startBirthday(
+    const BirthdaySettings& settings)
+{
+    if (!settings.enabled)
+        return;
+
+    /*
+     * Birthday mode takes over from the normal decorative
+     * animation system.
+     */
+    hideAnimation();
+
+    birthdayImage_.reset();
+
+    birthdayActive_ = true;
+
+    SDL_Log(
+        "AnimationManager: birthday mode started");
+}
+
+void AnimationManager::stopBirthday()
+{
+    birthdayActive_ = false;
+
+    birthdayImage_.reset();
+
+    SDL_Log(
+        "AnimationManager: birthday mode stopped");
+}
+
+void AnimationManager::updateBirthday(
+    float deltaTime)
+{
+    if (!birthdayActive_)
+        return;
+
+    if (!birthdayLoaded_)
+        return;
+
+    birthdayImage_.update(
+        deltaTime);
+}
+
+void AnimationManager::renderBirthday(
+    SDL_Renderer* renderer)
+{
+    if (!birthdayActive_)
+        return;
+
+    if (!birthdayLoaded_)
+        return;
+
+    birthdayImage_.render(
+        renderer,
+        birthdayBounds_);
+}
+
+bool AnimationManager::isBirthdayActive() const
+{
+    return birthdayActive_;
+}
+
+// ============================================================
+// Random animation helpers
+// ============================================================
+
 float AnimationManager::randomFloat(
     float minimum,
     float maximum)
 {
-    std::uniform_real_distribution<float>
-        distribution(
-            minimum,
-            maximum);
+    std::uniform_real_distribution<float> distribution(
+        minimum,
+        maximum);
 
-    return distribution(randomEngine_);
+    return distribution(
+        randomEngine_);
 }
 
 std::size_t AnimationManager::randomAnimationIndex(
     const ClockSettings& settings)
 {
-    std::array<std::size_t, ANIMATION_COUNT>
-        available{};
-
-    std::size_t count = 0;
-
-    for (std::size_t i = 0; i < ANIMATION_COUNT; ++i) {
-        const AnimationConfig& config = settings.animations[i];
-
-        if (!config.enabled || !config.randomEnabled || !animations_[i].loaded) {
-            continue;
-        }
-
-        available[count] = i;
-        ++count;
-    }
-
-    if (count == 0)
-    {
-        return ANIMATION_COUNT;
-    }
-
-    std::uniform_int_distribution<std::size_t> distribution(0, count - 1);
-
-    return available[distribution(randomEngine_)];
-}
-
-void AnimationManager::startRandomAnimation(
-    const ClockSettings& settings)
-{
-    const std::size_t index =
-        randomAnimationIndex(settings);
-
-    if (index >= ANIMATION_COUNT) {
-        resetAppearanceTimer();
-        return;
-    }
-
-    showAnimation(index);
-}
-
-void AnimationManager::resetAppearanceTimer()
-{
-    /*
-     * Random appearance every 1–3 minutes.
-     */
-    nextAppearanceTimer_ = randomFloat(60.0f, 180.0f);
-}
-
-bool AnimationManager::checkScheduledAnimations(
-    const ClockSettings& settings,
-    const ClockTime& time)
-{
-    /*
-     * Only process each clock minute once.
-     */
-    if (time.hour == lastCheckedHour_ &&
-        time.minute == lastCheckedMinute_)
-    {
-        return false;
-    }
-
-    lastCheckedHour_ = time.hour;
-    lastCheckedMinute_ = time.minute;
+    std::vector<std::size_t> candidates;
 
     for (std::size_t i = 0;
          i < ANIMATION_COUNT;
@@ -322,19 +340,94 @@ bool AnimationManager::checkScheduledAnimations(
         const AnimationConfig& config =
             settings.animations[i];
 
-        if (!config.enabled ||
-            !config.scheduled ||
-            !animations_[i].loaded)
+        if (!config.enabled)
+            continue;
+
+        if (!animations_[i].loaded)
+            continue;
+
+        if (!config.randomEnabled)
+            continue;
+
+        candidates.push_back(i);
+    }
+
+    if (candidates.empty())
+        return ANIMATION_COUNT;
+
+    std::uniform_int_distribution<std::size_t>
+        distribution(
+            0,
+            candidates.size() - 1);
+
+    return candidates[
+        distribution(randomEngine_)
+    ];
+}
+
+void AnimationManager::startRandomAnimation(
+    const ClockSettings& settings)
+{
+    const std::size_t index =
+        randomAnimationIndex(settings);
+
+    if (index >= ANIMATION_COUNT)
+        return;
+
+    showAnimation(index);
+}
+
+void AnimationManager::resetAppearanceTimer()
+{
+    nextAppearanceTimer_ =
+        randomFloat(60.0f, 180.0f);
+}
+
+// ============================================================
+// Scheduled animations
+// ============================================================
+
+bool AnimationManager::checkScheduledAnimations(
+    const ClockSettings& settings,
+    const ClockTime& time)
+{
+    if (time.hour == lastCheckedHour_ &&
+        time.minute == lastCheckedMinute_)
+    {
+        return false;
+    }
+
+    lastCheckedHour_ =
+        time.hour;
+
+    lastCheckedMinute_ =
+        time.minute;
+
+    for (std::size_t i = 0;
+         i < ANIMATION_COUNT;
+         ++i)
+    {
+        const AnimationConfig& config =
+            settings.animations[i];
+
+        if (!config.enabled)
+            continue;
+
+        if (!config.scheduled)
+            continue;
+
+        if (config.scheduledHour != time.hour ||
+            config.scheduledMinute != time.minute)
         {
             continue;
         }
 
-        if (config.scheduledHour == time.hour &&
-            config.scheduledMinute == time.minute)
-        {
-            showAnimation(i);
-            return true;
-        }
+        if (!animations_[i].loaded)
+            continue;
+
+        showAnimation(i);
+
+        return true;
     }
 
     return false;
