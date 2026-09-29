@@ -6,6 +6,7 @@
 
 #include <cmath>
 #include <iostream>
+#include <vector>
 
 SceneRenderer::~SceneRenderer()
 {
@@ -265,19 +266,20 @@ void SceneRenderer::renderBackground(
         return;
     }
 
-    SDL_Texture* background = getBackgroundTexture(timeOfDay);
+    SDL_Texture* background =
+        getBackgroundTexture(timeOfDay);
 
     if (!background)
         return;
 
-    const SDL_FRect bounds = AppLayout::fullScreenBounds();
+    const SDL_FRect bounds =
+        AppLayout::fullScreenBounds();
 
     SDL_RenderTexture(
         renderer_,
         background,
         nullptr,
-        &bounds
-    );
+        &bounds);
 }
 
 void SceneRenderer::renderClock(
@@ -302,7 +304,8 @@ void SceneRenderer::renderClock(
 
     drawMusicBoxButton(
         musicManager.isMusicBoxPlaying(),
-        musicBoxButtonBounds);
+        musicBoxButtonBounds,
+        birthday);
 }
 
 void SceneRenderer::renderMusic(
@@ -325,15 +328,33 @@ void SceneRenderer::renderSettings(
 
 void SceneRenderer::drawMusicBoxButton(
     bool playing,
-    const SDL_FRect& bounds)
+    const SDL_FRect& bounds,
+    bool birthday)
 {
     if (!renderer_ || !musicBoxFont_)
         return;
 
-    const SDL_Color buttonColor =
-        playing
-            ? AppLayout::MUSIC_BOX_BUTTON_ACTIVE_COLOR
-            : AppLayout::MUSIC_BOX_BUTTON_COLOR;
+    SDL_Color buttonColor;
+
+    if (birthday)
+    {
+        buttonColor =
+            playing
+                ? AppLayout::BIRTHDAY_MUSIC_BOX_BUTTON_ACTIVE_COLOR
+                : AppLayout::BIRTHDAY_MUSIC_BOX_BUTTON_COLOR;
+    }
+    else
+    {
+        buttonColor =
+            playing
+                ? AppLayout::MUSIC_BOX_BUTTON_ACTIVE_COLOR
+                : AppLayout::MUSIC_BOX_BUTTON_COLOR;
+    }
+
+    const SDL_Color textColor =
+        birthday
+            ? AppLayout::BIRTHDAY_MUSIC_BOX_TEXT_COLOR
+            : AppLayout::MUSIC_BOX_TEXT_COLOR;
 
     SDL_SetRenderDrawColor(
         renderer_,
@@ -356,7 +377,7 @@ void SceneRenderer::drawMusicBoxButton(
             musicBoxFont_,
             text,
             0,
-            AppLayout::MUSIC_BOX_TEXT_COLOR);
+            textColor);
 
     if (!surface)
         return;

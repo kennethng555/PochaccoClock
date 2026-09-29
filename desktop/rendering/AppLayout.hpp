@@ -55,26 +55,14 @@ constexpr SDL_FRect MUSIC_BOX_BUTTON_BOUNDS = {
     48.0f
 };
 
-constexpr SDL_Color MUSIC_BOX_BUTTON_COLOR = {
-    184,
-    220,
-    180,
-    255
-};
+constexpr SDL_Color MUSIC_BOX_BUTTON_COLOR = {184, 220, 180, 255};
+constexpr SDL_Color MUSIC_BOX_BUTTON_ACTIVE_COLOR = {145, 195, 150, 255};
+constexpr SDL_Color MUSIC_BOX_TEXT_COLOR = {50, 80, 55, 255};
 
-constexpr SDL_Color MUSIC_BOX_BUTTON_ACTIVE_COLOR = {
-    145,
-    195,
-    150,
-    255
-};
-
-constexpr SDL_Color MUSIC_BOX_TEXT_COLOR = {
-    50,
-    80,
-    55,
-    255
-};
+// Birthday Music Box colors
+constexpr SDL_Color BIRTHDAY_MUSIC_BOX_BUTTON_COLOR = {136, 238, 174, 255};
+constexpr SDL_Color BIRTHDAY_MUSIC_BOX_BUTTON_ACTIVE_COLOR = {91, 194, 133, 255};
+constexpr SDL_Color BIRTHDAY_MUSIC_BOX_TEXT_COLOR = {113, 74, 45, 255};
 
 // ============================================================
 // Pochacco + bed

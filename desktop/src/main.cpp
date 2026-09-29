@@ -928,9 +928,22 @@ int main(int argc, char* argv[])
                     // Preserve existing SceneRenderer
                     // Music Box button behavior.
                     const SDL_Color buttonColor =
-                        musicManager.isMusicBoxPlaying()
-                            ? MUSIC_BOX_BUTTON_ACTIVE_COLOR
-                            : MUSIC_BOX_BUTTON_COLOR;
+                        birthday
+                            ? (
+                                musicManager.isMusicBoxPlaying()
+                                    ? BIRTHDAY_MUSIC_BOX_BUTTON_ACTIVE_COLOR
+                                    : BIRTHDAY_MUSIC_BOX_BUTTON_COLOR
+                            )
+                            : (
+                                musicManager.isMusicBoxPlaying()
+                                    ? MUSIC_BOX_BUTTON_ACTIVE_COLOR
+                                    : MUSIC_BOX_BUTTON_COLOR
+                            );
+
+                    const SDL_Color textColor =
+                        birthday
+                            ? BIRTHDAY_MUSIC_BOX_TEXT_COLOR
+                            : MUSIC_BOX_TEXT_COLOR;
 
                     SDL_SetRenderDrawColor(
                         renderer,
@@ -953,7 +966,7 @@ int main(int argc, char* argv[])
                             musicBoxFont,
                             text,
                             0,
-                            MUSIC_BOX_TEXT_COLOR);
+                            textColor);
 
                     if (surface)
                     {

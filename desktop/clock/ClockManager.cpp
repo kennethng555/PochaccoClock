@@ -173,23 +173,22 @@ ClockManager::getAnimationManager()
 // Birthday
 // ============================================================
 
-void ClockManager::startBirthday(
-    const BirthdaySettings& settings)
+void ClockManager::startBirthday(const BirthdaySettings& settings)
 {
     if (!settings.enabled)
         return;
 
-    birthdaySettings_ =
-        settings;
-
+    birthdaySettings_ = settings;
     birthdayActive_ = true;
 
-    animationManager_.startBirthday(
-        settings);
+    digitalRenderer_->setBirthdayMode(true);
+
+    animationManager_.startBirthday(settings);
 
     SDL_Log(
         "ClockManager: birthday mode started for %s",
-        birthdaySettings_.name.c_str());
+        birthdaySettings_.name.c_str()
+    );
 }
 
 void ClockManager::stopBirthday()
@@ -199,10 +198,11 @@ void ClockManager::stopBirthday()
 
     birthdayActive_ = false;
 
+    digitalRenderer_->setBirthdayMode(false);
+
     animationManager_.stopBirthday();
 
-    SDL_Log(
-        "ClockManager: birthday mode stopped");
+    SDL_Log("ClockManager: birthday mode stopped");
 }
 
 bool ClockManager::isBirthdayActive() const
@@ -231,8 +231,8 @@ void ClockManager::renderBirthdayText()
     const std::string title = "HAPPY BIRTHDAY!";
     const std::string name = birthdaySettings_.name;
 
-    SDL_Color textColor{255, 255, 255, 255};
-    SDL_Color shadowColor{0, 0, 0, 255};
+    const SDL_Color textColor{255, 255, 255, 255};
+    const SDL_Color outlineColor{113, 74, 45, 255};
 
     auto renderCenteredText =
         [&](TTF_Font* font,
@@ -240,16 +240,22 @@ void ClockManager::renderBirthdayText()
             float centerX,
             float y)
     {
-        if (!font)
+        if (!font || text.empty())
             return;
 
-        SDL_Surface* shadowSurface =
+        /*
+         * Render the outline version.
+         */
+        SDL_Surface* outlineSurface =
             TTF_RenderText_Blended(
                 font,
                 text.c_str(),
                 0,
-                shadowColor);
+                outlineColor);
 
+        /*
+         * Render the actual white letters.
+         */
         SDL_Surface* textSurface =
             TTF_RenderText_Blended(
                 font,
@@ -257,54 +263,89 @@ void ClockManager::renderBirthdayText()
                 0,
                 textColor);
 
-        if (!shadowSurface || !textSurface)
+        if (!outlineSurface || !textSurface)
         {
-            if (shadowSurface)
-                SDL_DestroySurface(shadowSurface);
+            if (outlineSurface)
+                SDL_DestroySurface(outlineSurface);
+
             if (textSurface)
                 SDL_DestroySurface(textSurface);
+
             return;
         }
 
-        SDL_Texture* shadowTexture =
+        SDL_Texture* outlineTexture =
             SDL_CreateTextureFromSurface(
                 renderer_,
-                shadowSurface);
+                outlineSurface);
 
         SDL_Texture* textTexture =
             SDL_CreateTextureFromSurface(
                 renderer_,
                 textSurface);
 
-        if (shadowTexture && textTexture)
+        if (outlineTexture && textTexture)
         {
-            const float shadowX =
-                centerX -
-                static_cast<float>(shadowSurface->w) / 2.0f;
-
             const float textX =
                 centerX -
                 static_cast<float>(textSurface->w) / 2.0f;
 
-            SDL_FRect shadowBounds{
-                shadowX + 2.0f,
-                y + 2.0f,
-                static_cast<float>(shadowSurface->w),
-                static_cast<float>(shadowSurface->h)
+            const float textY = y;
+
+            /*
+             * Draw the black outline in all directions.
+             *
+             * Because the copies are only offset by 2 pixels,
+             * they merge into a border around the letters.
+             */
+            constexpr float outline = 3.0f;
+
+            const float outlineX =
+                centerX -
+                static_cast<float>(outlineSurface->w) / 2.0f;
+
+            SDL_FRect outlineBounds{
+                outlineX,
+                textY,
+                static_cast<float>(outlineSurface->w),
+                static_cast<float>(outlineSurface->h)
             };
 
+            const float offsets[][2] = {
+                {-outline, -outline},
+                { 0.0f,   -outline},
+                { outline, -outline},
+                {-outline,  0.0f},
+                { outline,  0.0f},
+                {-outline,  outline},
+                { 0.0f,    outline},
+                { outline,  outline}
+            };
+
+            for (const auto& offset : offsets)
+            {
+                outlineBounds.x =
+                    outlineX + offset[0];
+
+                outlineBounds.y =
+                    textY + offset[1];
+
+                SDL_RenderTexture(
+                    renderer_,
+                    outlineTexture,
+                    nullptr,
+                    &outlineBounds);
+            }
+
+            /*
+             * Draw the actual white letters on top.
+             */
             SDL_FRect textBounds{
                 textX,
-                y,
+                textY,
                 static_cast<float>(textSurface->w),
                 static_cast<float>(textSurface->h)
             };
-
-            SDL_RenderTexture(
-                renderer_,
-                shadowTexture,
-                nullptr,
-                &shadowBounds);
 
             SDL_RenderTexture(
                 renderer_,
@@ -313,19 +354,18 @@ void ClockManager::renderBirthdayText()
                 &textBounds);
         }
 
-        if (shadowTexture)
-            SDL_DestroyTexture(shadowTexture);
+        if (outlineTexture)
+            SDL_DestroyTexture(outlineTexture);
 
         if (textTexture)
             SDL_DestroyTexture(textTexture);
 
-        SDL_DestroySurface(shadowSurface);
+        SDL_DestroySurface(outlineSurface);
         SDL_DestroySurface(textSurface);
     };
 
-    const float centerX = 300.0f;
+    constexpr float centerX = 300.0f;
 
-    // Birthday text at the bottom.
     renderCenteredText(
         birthdayFont_,
         title,

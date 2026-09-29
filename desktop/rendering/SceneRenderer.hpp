@@ -66,7 +66,8 @@ private:
 
     void drawMusicBoxButton(
         bool playing,
-        const SDL_FRect& bounds);
+        const SDL_FRect& bounds,
+        bool birthday);
 
 private:
     SDL_Renderer* renderer_ = nullptr;

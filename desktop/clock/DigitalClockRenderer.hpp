@@ -27,25 +27,27 @@ public:
         TimeOfDay timeOfDay
     );
 
+    void setBirthdayMode(bool enabled);
+
 private:
 
     void drawTime(
         const ClockTime& time,
         const SDL_FRect& bounds,
-        SDL_Color textColor
-    );
+        SDL_Color textColor,
+        SDL_Color outlineColor);
 
     void drawAmPm(
         const ClockTime& time,
         const SDL_FRect& bounds,
-        SDL_Color textColor
-    );
+        SDL_Color textColor,
+        SDL_Color outlineColor);
 
     void drawDate(
         const ClockTime& time,
         const SDL_FRect& bounds,
-        SDL_Color textColor
-    );
+        SDL_Color textColor,
+        SDL_Color outlineColor);
 
     void drawText(
         TTF_Font* font,
@@ -65,4 +67,5 @@ private:
     TTF_Font* timeFont_;
     TTF_Font* smallFont_;
     
+    bool birthdayMode_ = false;
 };

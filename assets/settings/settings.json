@@ -94,7 +94,7 @@
     ],
     "birthday": {
         "animationDirectory": "../assets/birthday/animation",
-        "day": 28,
+        "day": 30,
         "enabled": true,
         "frameCount": 3,
         "month": 9,

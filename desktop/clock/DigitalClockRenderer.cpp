@@ -14,23 +14,23 @@ namespace
     constexpr int TIME_FONT_SIZE = 72;
     constexpr int SMALL_FONT_SIZE = 36;
 
-    // Space between the time and AM/PM.
     constexpr float AMPM_SPACING = 8.0f;
-
-    // Vertical position of the time within clockBounds.
     constexpr float TIME_Y_OFFSET = 25.0f;
-
-    // Vertical position of the date.
     constexpr float DATE_Y_OFFSET = 105.0f;
 
-    // Space allocated to each digit.
-    //
-    // The actual glyph can be narrower than this, but the
-    // position of every digit remains fixed.
     constexpr float DIGIT_SLOT_WIDTH = 43.0f;
-
-    // Space around ':'.
     constexpr float COLON_SLOT_WIDTH = 24.0f;
+
+    constexpr int TEXT_OUTLINE_WIDTH = 3;
+    constexpr SDL_Color NORMAL_OUTLINE_COLOR = {0, 0, 0, 255};
+    constexpr SDL_Color BIRTHDAY_OUTLINE_COLOR = {255, 255, 255, 255};
+
+    // --------------------------------------------------------
+    // Birthday colors
+    // --------------------------------------------------------
+
+    constexpr SDL_Color BIRTHDAY_TIME_COLOR = {113, 74, 45, 255};
+    constexpr SDL_Color BIRTHDAY_SMALL_COLOR = {113, 74, 45, 255};
 }
 
 // ============================================================
@@ -135,24 +135,53 @@ void DigitalClockRenderer::render(
         return;
     }
 
-    SDL_Color textColor;
+    SDL_Color timeColor;
+    SDL_Color smallColor;
+    SDL_Color outlineColor;
 
-    switch (timeOfDay) {
+    if (birthdayMode_) {
 
-        case TimeOfDay::Morning:
-        case TimeOfDay::Day:
-        case TimeOfDay::Evening:
-            textColor = SDL_Color{0, 0, 0, 255};
-            break;
+        timeColor = BIRTHDAY_TIME_COLOR;
+        smallColor = BIRTHDAY_SMALL_COLOR;
+        outlineColor = BIRTHDAY_OUTLINE_COLOR;
 
-        case TimeOfDay::Night:
-            textColor = SDL_Color{255, 255, 255, 255};
-            break;
+    } else {
+
+        switch (timeOfDay) {
+
+            case TimeOfDay::Morning:
+            case TimeOfDay::Day:
+            case TimeOfDay::Evening:
+                timeColor = {0, 0, 0, 255};
+                smallColor = {0, 0, 0, 255};
+                outlineColor = {255, 255, 255, 255};
+                break;
+
+            case TimeOfDay::Night:
+                timeColor = {255, 255, 255, 255};
+                smallColor = {255, 255, 255, 255};
+                outlineColor = {0, 0, 0, 255};
+                break;
+        }
     }
 
-    drawTime(time, bounds, textColor);
-    drawAmPm(time, bounds, textColor);
-    drawDate(time, bounds, textColor);
+    drawTime(
+        time,
+        bounds,
+        timeColor,
+        outlineColor);
+
+    drawAmPm(
+        time,
+        bounds,
+        smallColor,
+        outlineColor);
+
+    drawDate(
+        time,
+        bounds,
+        smallColor,
+        outlineColor);
 }
 
 // ============================================================
@@ -162,14 +191,10 @@ void DigitalClockRenderer::render(
 void DigitalClockRenderer::drawTime(
     const ClockTime& time,
     const SDL_FRect& bounds,
-    SDL_Color textColor)
+    SDL_Color textColor,
+    SDL_Color outlineColor)
 {
-    // --------------------------------------------------------
-    // Convert to 12-hour format.
-    // --------------------------------------------------------
-
-    int hour =
-        time.hour % 12;
+    int hour = time.hour % 12;
 
     if (hour == 0) {
         hour = 12;
@@ -186,16 +211,6 @@ void DigitalClockRenderer::drawTime(
         time.second
     );
 
-    // --------------------------------------------------------
-    // Calculate total width.
-    //
-    // Format:
-    //
-    //     0 3 : 4 5 : 2 7
-    //
-    // Every digit receives the same slot width.
-    // --------------------------------------------------------
-
     constexpr int DIGIT_COUNT = 6;
     constexpr int COLON_COUNT = 2;
 
@@ -203,16 +218,9 @@ void DigitalClockRenderer::drawTime(
         DIGIT_COUNT * DIGIT_SLOT_WIDTH +
         COLON_COUNT * COLON_SLOT_WIDTH;
 
-    // --------------------------------------------------------
-    // Center the fixed-width time area.
-    // --------------------------------------------------------
-
     const float startX =
         bounds.x +
-        (
-            bounds.w -
-            timeWidth
-        ) / 2.0f;
+        (bounds.w - timeWidth) / 2.0f;
 
     const float y =
         bounds.y +
@@ -220,34 +228,52 @@ void DigitalClockRenderer::drawTime(
 
     float currentX = startX;
 
-    // --------------------------------------------------------
-    // Render each character.
-    // --------------------------------------------------------
-
     for (int i = 0; buffer[i] != '\0'; ++i) {
 
-        const char character =
-            buffer[i];
-
-        // ----------------------------------------------------
-        // Determine slot width.
-        // ----------------------------------------------------
+        const char character = buffer[i];
 
         const float slotWidth =
             character == ':'
                 ? COLON_SLOT_WIDTH
                 : DIGIT_SLOT_WIDTH;
 
-        // ----------------------------------------------------
-        // Render character.
-        // ----------------------------------------------------
-
         char characterBuffer[2]{
             character,
             '\0'
         };
 
-        SDL_Surface* surface =
+        // ----------------------------------------------------
+        // Render the outlined version.
+        //
+        // The outline surface is larger than the normal
+        // glyph. We position it TEXT_OUTLINE_WIDTH pixels
+        // above/left so its inner glyph lines up with the
+        // normal glyph.
+        // ----------------------------------------------------
+
+        TTF_SetFontOutline(
+            timeFont_,
+            TEXT_OUTLINE_WIDTH
+        );
+
+        SDL_Surface* outlineSurface =
+            TTF_RenderText_Blended(
+                timeFont_,
+                characterBuffer,
+                0,
+                outlineColor
+            );
+
+        TTF_SetFontOutline(
+            timeFont_,
+            0
+        );
+
+        // ----------------------------------------------------
+        // Render the normal glyph.
+        // ----------------------------------------------------
+
+        SDL_Surface* textSurface =
             TTF_RenderText_Blended(
                 timeFont_,
                 characterBuffer,
@@ -255,83 +281,121 @@ void DigitalClockRenderer::drawTime(
                 textColor
             );
 
-        if (!surface) {
+        if (!outlineSurface || !textSurface) {
 
             std::cerr
                 << "TTF_RenderText_Blended failed: "
                 << SDL_GetError()
                 << '\n';
 
-            currentX += slotWidth;
+            if (outlineSurface)
+                SDL_DestroySurface(outlineSurface);
 
+            if (textSurface)
+                SDL_DestroySurface(textSurface);
+
+            currentX += slotWidth;
             continue;
         }
 
-        SDL_Texture* texture =
+        SDL_Texture* outlineTexture =
             SDL_CreateTextureFromSurface(
                 renderer_,
-                surface
+                outlineSurface
             );
 
-        if (!texture) {
+        SDL_Texture* textTexture =
+            SDL_CreateTextureFromSurface(
+                renderer_,
+                textSurface
+            );
+
+        if (!outlineTexture || !textTexture) {
 
             std::cerr
                 << "SDL_CreateTextureFromSurface failed: "
                 << SDL_GetError()
                 << '\n';
 
-            SDL_DestroySurface(surface);
+            if (outlineTexture)
+                SDL_DestroyTexture(outlineTexture);
+
+            if (textTexture)
+                SDL_DestroyTexture(textTexture);
+
+            SDL_DestroySurface(outlineSurface);
+            SDL_DestroySurface(textSurface);
 
             currentX += slotWidth;
-
             continue;
         }
 
         // ----------------------------------------------------
-        // Center the glyph inside its fixed slot.
+        // Position based on the NORMAL glyph.
+        //
+        // This preserves your existing fixed-width layout.
         // ----------------------------------------------------
 
         const float glyphWidth =
-            static_cast<float>(
-                surface->w
-            );
+            static_cast<float>(textSurface->w);
 
         const float glyphHeight =
-            static_cast<float>(
-                surface->h
-            );
+            static_cast<float>(textSurface->h);
 
-        SDL_FRect destination{};
-
-        destination.w =
-            glyphWidth;
-
-        destination.h =
-            glyphHeight;
-
-        destination.x =
+        const float glyphX =
             currentX +
-            (
-                slotWidth -
-                glyphWidth
-            ) / 2.0f;
+            (slotWidth - glyphWidth) / 2.0f;
 
-        destination.y =
-            y;
+        // ----------------------------------------------------
+        // Draw black outline.
+        // ----------------------------------------------------
+
+        SDL_FRect outlineDestination{};
+
+        outlineDestination.x =
+            glyphX -
+            TEXT_OUTLINE_WIDTH;
+
+        outlineDestination.y =
+            y -
+            TEXT_OUTLINE_WIDTH;
+
+        outlineDestination.w =
+            static_cast<float>(outlineSurface->w);
+
+        outlineDestination.h =
+            static_cast<float>(outlineSurface->h);
 
         SDL_RenderTexture(
             renderer_,
-            texture,
+            outlineTexture,
             nullptr,
-            &destination
+            &outlineDestination
         );
 
-        SDL_DestroyTexture(texture);
-        SDL_DestroySurface(surface);
+        // ----------------------------------------------------
+        // Draw the normal glyph directly over the center.
+        // ----------------------------------------------------
 
-        // ----------------------------------------------------
-        // Advance by the fixed slot width.
-        // ----------------------------------------------------
+        SDL_FRect textDestination{};
+
+        textDestination.x = glyphX;
+        textDestination.y = y;
+        textDestination.w = glyphWidth;
+        textDestination.h = glyphHeight;
+
+        SDL_RenderTexture(
+            renderer_,
+            textTexture,
+            nullptr,
+            &textDestination
+        );
+
+        SDL_DestroyTexture(outlineTexture);
+        SDL_DestroyTexture(textTexture);
+
+        SDL_DestroySurface(outlineSurface);
+        SDL_DestroySurface(textSurface);
 
         currentX += slotWidth;
     }
@@ -344,7 +408,8 @@ void DigitalClockRenderer::drawTime(
 void DigitalClockRenderer::drawAmPm(
     const ClockTime& time,
     const SDL_FRect& bounds,
-    SDL_Color textColor)
+    SDL_Color textColor,
+    SDL_Color outlineColor)
 {
     const char* ampm =
         time.hour >= 12
@@ -354,6 +419,24 @@ void DigitalClockRenderer::drawAmPm(
     // --------------------------------------------------------
     // Render AM / PM surface.
     // --------------------------------------------------------
+
+    TTF_SetFontOutline(
+        smallFont_,
+        TEXT_OUTLINE_WIDTH
+    );
+
+    SDL_Surface* outlineSurface =
+        TTF_RenderText_Blended(
+            smallFont_,
+            ampm,
+            0,
+            outlineColor
+        );
+
+    TTF_SetFontOutline(
+        smallFont_,
+        0
+    );
 
     SDL_Surface* surface =
         TTF_RenderText_Blended(
@@ -372,6 +455,12 @@ void DigitalClockRenderer::drawAmPm(
 
         return;
     }
+
+    SDL_Texture* outlineTexture =
+        SDL_CreateTextureFromSurface(
+            renderer_,
+            outlineSurface
+        );
 
     SDL_Texture* texture =
         SDL_CreateTextureFromSurface(
@@ -465,6 +554,24 @@ void DigitalClockRenderer::drawAmPm(
             destination.h
         );
 
+    SDL_FRect outlineDestination = destination;
+
+    outlineDestination.x -= TEXT_OUTLINE_WIDTH;
+    outlineDestination.y -= TEXT_OUTLINE_WIDTH;
+
+    outlineDestination.w =
+        static_cast<float>(outlineSurface->w);
+
+    outlineDestination.h =
+        static_cast<float>(outlineSurface->h);
+
+    SDL_RenderTexture(
+        renderer_,
+        outlineTexture,
+        nullptr,
+        &outlineDestination
+    );
+
     SDL_RenderTexture(
         renderer_,
         texture,
@@ -472,7 +579,10 @@ void DigitalClockRenderer::drawAmPm(
         &destination
     );
 
+    SDL_DestroyTexture(outlineTexture);
     SDL_DestroyTexture(texture);
+
+    SDL_DestroySurface(outlineSurface);
     SDL_DestroySurface(surface);
 }
 
@@ -483,7 +593,8 @@ void DigitalClockRenderer::drawAmPm(
 void DigitalClockRenderer::drawDate(
     const ClockTime& time,
     const SDL_FRect& bounds,
-    SDL_Color textColor)
+    SDL_Color textColor,
+    SDL_Color outlineColor)
 {
     std::tm date{};
 
@@ -491,7 +602,7 @@ void DigitalClockRenderer::drawDate(
     date.tm_mon  = time.month - 1;
     date.tm_mday = time.day;
 
-    // Calculate weekday and normalize the tm structure
+    // Calculate weekday and normalize the tm structure.
     std::mktime(&date);
 
     char buffer[64];
@@ -516,23 +627,159 @@ void DigitalClockRenderer::drawDate(
 
     const float timeStartX =
         bounds.x +
-        (
-            bounds.w -
-            timeWidth
-        ) / 2.0f;
+        (bounds.w - timeWidth) / 2.0f;
+
+    const float x = timeStartX;
+    const float y = bounds.y + DATE_Y_OFFSET;
 
     // --------------------------------------------------------
-    // Date
+    // Render black outline.
     // --------------------------------------------------------
 
-    drawText(
+    TTF_SetFontOutline(
         smallFont_,
-        buffer,
-        textColor,
-        timeStartX,
-        bounds.y + DATE_Y_OFFSET,
-        false
+        TEXT_OUTLINE_WIDTH
     );
+
+    SDL_Surface* outlineSurface =
+        TTF_RenderText_Blended(
+            smallFont_,
+            buffer,
+            0,
+            outlineColor
+        );
+
+    // Immediately reset the font.
+    TTF_SetFontOutline(
+        smallFont_,
+        0
+    );
+
+    // --------------------------------------------------------
+    // Render normal date text.
+    // --------------------------------------------------------
+
+    SDL_Surface* textSurface =
+        TTF_RenderText_Blended(
+            smallFont_,
+            buffer,
+            0,
+            textColor
+        );
+
+    if (!outlineSurface || !textSurface) {
+
+        std::cerr
+            << "Failed to render date text: "
+            << SDL_GetError()
+            << '\n';
+
+        if (outlineSurface)
+            SDL_DestroySurface(outlineSurface);
+
+        if (textSurface)
+            SDL_DestroySurface(textSurface);
+
+        return;
+    }
+
+    SDL_Texture* outlineTexture =
+        SDL_CreateTextureFromSurface(
+            renderer_,
+            outlineSurface
+        );
+
+    SDL_Texture* textTexture =
+        SDL_CreateTextureFromSurface(
+            renderer_,
+            textSurface
+        );
+
+    if (!outlineTexture || !textTexture) {
+
+        std::cerr
+            << "Failed to create date textures: "
+            << SDL_GetError()
+            << '\n';
+
+        if (outlineTexture)
+            SDL_DestroyTexture(outlineTexture);
+
+        if (textTexture)
+            SDL_DestroyTexture(textTexture);
+
+        SDL_DestroySurface(outlineSurface);
+        SDL_DestroySurface(textSurface);
+
+        return;
+    }
+
+    // --------------------------------------------------------
+    // Normal text position.
+    // --------------------------------------------------------
+
+    const float textWidth =
+        static_cast<float>(textSurface->w);
+
+    const float textHeight =
+        static_cast<float>(textSurface->h);
+
+    SDL_FRect textDestination{};
+
+    textDestination.x = x;
+    textDestination.y = y;
+    textDestination.w = textWidth;
+    textDestination.h = textHeight;
+
+    // --------------------------------------------------------
+    // Outline position.
+    //
+    // The outlined surface is larger by 2 * outline width.
+    // Offset it so the inner glyph lines up exactly with the
+    // normal text.
+    // --------------------------------------------------------
+
+    SDL_FRect outlineDestination{};
+
+    outlineDestination.x =
+        x - TEXT_OUTLINE_WIDTH;
+
+    outlineDestination.y =
+        y - TEXT_OUTLINE_WIDTH;
+
+    outlineDestination.w =
+        static_cast<float>(outlineSurface->w);
+
+    outlineDestination.h =
+        static_cast<float>(outlineSurface->h);
+
+    // --------------------------------------------------------
+    // Draw outline first.
+    // --------------------------------------------------------
+
+    SDL_RenderTexture(
+        renderer_,
+        outlineTexture,
+        nullptr,
+        &outlineDestination
+    );
+
+    // --------------------------------------------------------
+    // Draw date over the center of the outline.
+    // --------------------------------------------------------
+
+    SDL_RenderTexture(
+        renderer_,
+        textTexture,
+        nullptr,
+        &textDestination
+    );
+
+    SDL_DestroyTexture(outlineTexture);
+    SDL_DestroyTexture(textTexture);
+
+    SDL_DestroySurface(outlineSurface);
+    SDL_DestroySurface(textSurface);
 }
 
 
@@ -623,4 +870,9 @@ void DigitalClockRenderer::drawText(
 
     SDL_DestroyTexture(texture);
     SDL_DestroySurface(surface);
+}
+
+void DigitalClockRenderer::setBirthdayMode(bool enabled)
+{
+    birthdayMode_ = enabled;
 }
