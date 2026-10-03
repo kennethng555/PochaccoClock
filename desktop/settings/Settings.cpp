@@ -30,18 +30,18 @@ void Settings::createDefaults()
     * --------------------------------------------------------
     */
 
-    config_.birthday.enabled = false;
+    config_.birthday.enabled = true;
     config_.birthday.month = 1;
     config_.birthday.day = 1;
     config_.birthday.name = "Pochacco";
 
     config_.birthday.animationDirectory =
-        "../assets/animations/Birthday";
+        "../assets/birthday/animation";
 
-    config_.birthday.frameCount = 20;
+    config_.birthday.frameCount = 3;
 
     config_.birthday.musicPath =
-        "../assets/music/HappyBirthday.wav";
+        "../assets/birthday/music/HappyBirthday.wav";
 
     /*
      * --------------------------------------------------------
@@ -129,6 +129,31 @@ void Settings::createDefaults()
     config_.animations[1].y = 250.0f;
     config_.animations[1].width = 122.5f;
     config_.animations[1].height = 200.0f;
+
+    /*
+     * Kiki
+     */
+    config_.animations[2].enabled = true;
+    config_.animations[2].randomEnabled = false;
+
+    config_.animations[2].scheduled = true;
+    config_.animations[2].scheduledHour = 12;
+    config_.animations[2].scheduledMinute = 0;
+
+    config_.animations[2].name = "Kiki";
+    config_.animations[2].directory = "../assets/animations/Kiki";
+    config_.animations[2].frameCount = 9;
+
+    config_.animations[2].frameDuration = 1.0f;
+    config_.animations[2].displayDuration = 30.0f;
+
+    config_.animations[2].startHour = 8;
+    config_.animations[2].endHour = 22;
+
+    config_.animations[2].x = 50.0f;
+    config_.animations[2].y = 275.0f;
+    config_.animations[2].width = 145.5f;
+    config_.animations[2].height = 172.5f;
 
     /*
      * Remaining animation slots keep AnimationConfig defaults.

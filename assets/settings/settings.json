@@ -56,22 +56,22 @@
             "y": 250.0
         },
         {
-            "directory": "",
+            "directory": "../assets/animations/Kiki",
             "displayDuration": 30.0,
             "enabled": true,
             "endHour": 22,
-            "frameCount": 0,
-            "frameDuration": 0.10000000149011612,
-            "height": 112.5,
-            "name": "",
+            "frameCount": 9,
+            "frameDuration": 1.0,
+            "height": 172.5,
+            "name": "Kiki",
             "randomEnabled": false,
-            "scheduled": false,
-            "scheduledHour": 0,
+            "scheduled": true,
+            "scheduledHour": 12,
             "scheduledMinute": 0,
             "startHour": 8,
-            "width": 150.0,
-            "x": 5.0,
-            "y": 325.0
+            "width": 145.5,
+            "x": 50.0,
+            "y": 275.0
         },
         {
             "directory": "",
@@ -94,10 +94,10 @@
     ],
     "birthday": {
         "animationDirectory": "../assets/birthday/animation",
-        "day": 30,
+        "day": 1,
         "enabled": true,
         "frameCount": 3,
-        "month": 9,
+        "month": 1,
         "musicPath": "../assets/birthday/music/HappyBirthday.wav",
         "name": "Pochacco"
     },

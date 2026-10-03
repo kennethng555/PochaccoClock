@@ -392,48 +392,11 @@ void SettingsActionHandler::handle(
 
         case SettingsAction::DebugShowAnimation:
         {
-            static std::size_t debugAnimationIndex = 0;
+            clockManager
+                .getAnimationManager()
+                .showNextAnimation();
 
-            const ClockSettings& config =
-                settings.get();
-
-            constexpr std::size_t animationCount =
-                std::tuple_size<
-                    decltype(config.animations)
-                >::value;
-
-            for (std::size_t i = 0;
-                 i < animationCount;
-                 ++i)
-            {
-                const std::size_t index =
-                    (debugAnimationIndex + i) %
-                    animationCount;
-
-                const AnimationConfig& animation =
-                    config.animations[index];
-
-                if (!animation.enabled ||
-                    animation.directory.empty())
-                {
-                    continue;
-                }
-
-                SDL_Log(
-                    "DEBUG: Showing animation %zu: %s",
-                    index,
-                    animation.name.c_str());
-
-                clockManager
-                    .getAnimationManager()
-                    .showAnimation(index);
-
-                debugAnimationIndex =
-                    (index + 1) %
-                    animationCount;
-
-                break;
-            }
+            currentMode = AppMode::Clock;
 
             break;
         }

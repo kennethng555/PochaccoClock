@@ -3,14 +3,30 @@
 #include <SDL3/SDL.h>
 #include <SDL3_image/SDL_image.h>
 
+#include <cstddef>
 #include <string>
 #include <vector>
+#include <utility>
 
 class AnimatedImage
 {
 public:
 
+    AnimatedImage() = default;
+
     ~AnimatedImage();
+
+    AnimatedImage(
+        const AnimatedImage&) = delete;
+
+    AnimatedImage& operator=(
+        const AnimatedImage&) = delete;
+
+    AnimatedImage(
+        AnimatedImage&& other) noexcept;
+
+    AnimatedImage& operator=(
+        AnimatedImage&& other) noexcept;
 
     bool load(
         SDL_Renderer* renderer,
@@ -34,8 +50,5 @@ private:
 
     float frameTimer = 0.0f;
 
-    /*
-     * 200 ms per frame = 5 FPS.
-     */
-    float frameDuration = 0.20f;
+    float frameDuration = 0.15f;
 };

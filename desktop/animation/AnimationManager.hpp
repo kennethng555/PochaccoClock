@@ -6,16 +6,14 @@
 
 #include <SDL3/SDL.h>
 
-#include <array>
 #include <cstddef>
 #include <random>
 #include <string>
+#include <vector>
 
 class AnimationManager
 {
 public:
-
-    static constexpr std::size_t ANIMATION_COUNT = 4;
 
     AnimationManager();
 
@@ -40,6 +38,8 @@ public:
 
     void showAnimation(
         const std::string& directory);
+    
+    void showNextAnimation();
 
     void hideAnimation();
 
@@ -81,10 +81,8 @@ private:
         bool loaded = false;
     };
 
-    std::array<
-        Animation,
-        ANIMATION_COUNT
-    > animations_;
+    std::vector<Animation> animations_;
+    std::size_t debugAnimationIndex_ = 0;
 
     std::size_t currentAnimation_ = 0;
 

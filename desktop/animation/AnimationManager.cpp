@@ -2,6 +2,13 @@
 
 #include <algorithm>
 #include <chrono>
+#include <filesystem>
+
+namespace
+{
+constexpr const char* ANIMATIONS_DIRECTORY =
+    "../assets/animations";
+}
 
 AnimationManager::AnimationManager()
 {
@@ -23,56 +30,141 @@ bool AnimationManager::initialize(
     // Normal animations
     // ========================================================
 
-    for (std::size_t i = 0;
-         i < ANIMATION_COUNT;
-         ++i)
+    namespace fs = std::filesystem;
+
+    animations_.clear();
+
+    currentAnimation_ = 0;
+    debugAnimationIndex_ = 0;
+
+    active_ = false;
+    displayTimer_ = 0.0f;
+
+    const fs::path animationRoot =
+        ANIMATIONS_DIRECTORY;
+
+    if (!fs::exists(animationRoot) ||
+        !fs::is_directory(animationRoot))
     {
-        Animation& animation =
-            animations_[i];
+        SDL_Log(
+            "AnimationManager: animation directory not found: %s",
+            animationRoot.string().c_str());
+
+        return false;
+    }
+
+    std::vector<fs::path> directories;
+
+    for (const auto& entry :
+         fs::directory_iterator(animationRoot))
+    {
+        if (!entry.is_directory())
+            continue;
+
+        directories.push_back(
+            entry.path());
+    }
+
+    /*
+     * directory_iterator does not guarantee ordering.
+     *
+     * Sort the directories so the debug animation order
+     * remains deterministic.
+     */
+    std::sort(
+        directories.begin(),
+        directories.end());
+
+    SDL_Log(
+        "AnimationManager: found %zu animation directories",
+        directories.size());
+
+    for (const fs::path& directoryPath :
+         directories)
+    {
+        Animation animation;
 
         animation.loaded = false;
-        animation.directory.clear();
-
-        const AnimationConfig& config =
-            settings.animations[i];
-
-        animation.bounds = SDL_FRect{
-            config.x,
-            config.y,
-            config.width,
-            config.height
-        };
 
         animation.directory =
-            config.directory;
+            directoryPath.string();
 
-        if (!config.enabled)
-            continue;
+        // ----------------------------------------------------
+        // Find matching settings entry.
+        // ----------------------------------------------------
 
-        if (config.directory.empty())
-            continue;
+        const AnimationConfig* config =
+            nullptr;
 
-        if (config.frameCount == 0)
+        for (const AnimationConfig& candidate :
+             settings.animations)
+        {
+            if (candidate.directory ==
+                animation.directory)
+            {
+                config = &candidate;
+                break;
+            }
+        }
+
+        if (config == nullptr)
+        {
+            SDL_Log(
+                "AnimationManager: no settings entry for %s",
+                animation.directory.c_str());
+
             continue;
+        }
+
+        if (!config->enabled)
+        {
+            SDL_Log(
+                "AnimationManager: animation disabled: %s",
+                animation.directory.c_str());
+
+            continue;
+        }
+
+        if (config->frameCount == 0)
+        {
+            SDL_Log(
+                "AnimationManager: animation has no frames: %s",
+                animation.directory.c_str());
+
+            continue;
+        }
+
+        animation.bounds = SDL_FRect{
+            config->x,
+            config->y,
+            config->width,
+            config->height
+        };
+
+        // ----------------------------------------------------
+        // Load animation.
+        // ----------------------------------------------------
 
         if (animation.image.load(
                 renderer,
-                config.directory,
-                config.frameCount))
+                animation.directory,
+                config->frameCount))
         {
             animation.loaded = true;
 
             SDL_Log(
                 "AnimationManager: loaded animation %zu: %s",
-                i,
-                config.name.c_str());
+                animations_.size(),
+                animation.directory.c_str());
+
+            animations_.push_back(
+                std::move(animation));
         }
         else
         {
             SDL_Log(
-                "AnimationManager: failed to load animation %zu: %s",
-                i,
-                config.name.c_str());
+                "AnimationManager: failed to load animation: %s",
+                animation.directory.c_str());
         }
     }
 
@@ -84,8 +176,8 @@ bool AnimationManager::initialize(
     birthdayActive_ = false;
 
     /*
-     * Birthday is deliberately NOT part of the four normal
-     * animation slots.
+     * Birthday animation is deliberately NOT part of the
+     * normal animation directory scan.
      */
     if (!settings.birthday.animationDirectory.empty() &&
         settings.birthday.frameCount > 0)
@@ -122,37 +214,61 @@ void AnimationManager::update(
 {
     if (active_)
     {
-        if (currentAnimation_ < ANIMATION_COUNT)
+        if (currentAnimation_ < animations_.size())
         {
             Animation& animation =
                 animations_[currentAnimation_];
 
             if (animation.loaded)
             {
-                animation.image.update(deltaTime);
+                animation.image.update(
+                    deltaTime);
             }
 
             displayTimer_ += deltaTime;
 
-            const float displayDuration =
-                settings.animations[
-                    currentAnimation_
-                ].displayDuration;
+            /*
+             * Settings are matched by directory rather than
+             * assuming the settings index matches the animation
+             * vector index.
+             */
+            const AnimationConfig* config =
+                nullptr;
 
-            if (displayDuration > 0.0f &&
-                displayTimer_ >= displayDuration)
+            for (const AnimationConfig& candidate :
+                 settings.animations)
             {
-                hideAnimation();
+                if (candidate.directory ==
+                    animation.directory)
+                {
+                    config = &candidate;
+                    break;
+                }
+            }
+
+            if (config != nullptr)
+            {
+                const float displayDuration =
+                    config->displayDuration;
+
+                if (displayDuration > 0.0f &&
+                    displayTimer_ >= displayDuration)
+                {
+                    hideAnimation();
+                }
             }
         }
     }
     else
     {
-        nextAppearanceTimer_ -= deltaTime;
+        nextAppearanceTimer_ -=
+            deltaTime;
 
         if (nextAppearanceTimer_ <= 0.0f)
         {
-            startRandomAnimation(settings);
+            startRandomAnimation(
+                settings);
+
             resetAppearanceTimer();
         }
     }
@@ -172,7 +288,7 @@ void AnimationManager::render(
     if (!active_)
         return;
 
-    if (currentAnimation_ >= ANIMATION_COUNT)
+    if (currentAnimation_ >= animations_.size())
         return;
 
     Animation& animation =
@@ -193,7 +309,7 @@ void AnimationManager::render(
 void AnimationManager::showAnimation(
     std::size_t animationIndex)
 {
-    if (animationIndex >= ANIMATION_COUNT)
+    if (animationIndex >= animations_.size())
         return;
 
     Animation& animation =
@@ -216,16 +332,68 @@ void AnimationManager::showAnimation(
     const std::string& directory)
 {
     for (std::size_t i = 0;
-         i < ANIMATION_COUNT;
+         i < animations_.size();
          ++i)
     {
-        if (animations_[i].directory == directory)
+        if (animations_[i].directory ==
+            directory)
         {
             showAnimation(i);
             return;
         }
     }
+
+    SDL_Log(
+        "AnimationManager: animation not found: %s",
+        directory.c_str());
 }
+
+// ============================================================
+// Debug animation
+// ============================================================
+
+void AnimationManager::showNextAnimation()
+{
+    if (animations_.empty())
+    {
+        SDL_Log(
+            "DEBUG: No animations loaded");
+
+        return;
+    }
+
+    if (debugAnimationIndex_ >=
+        animations_.size())
+    {
+        debugAnimationIndex_ = 0;
+    }
+
+    const std::size_t index =
+        debugAnimationIndex_;
+
+    SDL_Log(
+        "DEBUG: Showing animation %zu/%zu: %s",
+        index + 1,
+        animations_.size(),
+        animations_[index].directory.c_str());
+
+    /*
+     * Use showAnimation() rather than modifying
+     * currentAnimation_ directly.
+     *
+     * This ensures the selected animation is the one
+     * that AnimationManager::render() will render.
+     */
+    showAnimation(index);
+
+    debugAnimationIndex_ =
+        (debugAnimationIndex_ + 1) %
+        animations_.size();
+}
+
+// ============================================================
+// Hide normal animation
+// ============================================================
 
 void AnimationManager::hideAnimation()
 {
@@ -320,9 +488,10 @@ float AnimationManager::randomFloat(
     float minimum,
     float maximum)
 {
-    std::uniform_real_distribution<float> distribution(
-        minimum,
-        maximum);
+    std::uniform_real_distribution<float>
+        distribution(
+            minimum,
+            maximum);
 
     return distribution(
         randomEngine_);
@@ -334,26 +503,40 @@ std::size_t AnimationManager::randomAnimationIndex(
     std::vector<std::size_t> candidates;
 
     for (std::size_t i = 0;
-         i < ANIMATION_COUNT;
+         i < animations_.size();
          ++i)
     {
-        const AnimationConfig& config =
-            settings.animations[i];
+        const Animation& animation =
+            animations_[i];
 
-        if (!config.enabled)
+        if (!animation.loaded)
             continue;
 
-        if (!animations_[i].loaded)
+        const AnimationConfig* config =
+            nullptr;
+
+        for (const AnimationConfig& candidate :
+             settings.animations)
+        {
+            if (candidate.directory ==
+                animation.directory)
+            {
+                config = &candidate;
+                break;
+            }
+        }
+
+        if (config == nullptr)
             continue;
 
-        if (!config.randomEnabled)
+        if (!config->randomEnabled)
             continue;
 
         candidates.push_back(i);
     }
 
     if (candidates.empty())
-        return ANIMATION_COUNT;
+        return animations_.size();
 
     std::uniform_int_distribution<std::size_t>
         distribution(
@@ -371,7 +554,7 @@ void AnimationManager::startRandomAnimation(
     const std::size_t index =
         randomAnimationIndex(settings);
 
-    if (index >= ANIMATION_COUNT)
+    if (index >= animations_.size())
         return;
 
     showAnimation(index);
@@ -380,7 +563,9 @@ void AnimationManager::startRandomAnimation(
 void AnimationManager::resetAppearanceTimer()
 {
     nextAppearanceTimer_ =
-        randomFloat(60.0f, 180.0f);
+        randomFloat(
+            60.0f,
+            180.0f);
 }
 
 // ============================================================
@@ -404,25 +589,39 @@ bool AnimationManager::checkScheduledAnimations(
         time.minute;
 
     for (std::size_t i = 0;
-         i < ANIMATION_COUNT;
+         i < animations_.size();
          ++i)
     {
-        const AnimationConfig& config =
-            settings.animations[i];
+        Animation& animation =
+            animations_[i];
 
-        if (!config.enabled)
+        const AnimationConfig* config =
+            nullptr;
+
+        for (const AnimationConfig& candidate :
+             settings.animations)
+        {
+            if (candidate.directory ==
+                animation.directory)
+            {
+                config = &candidate;
+                break;
+            }
+        }
+
+        if (config == nullptr)
             continue;
 
-        if (!config.scheduled)
+        if (!config->scheduled)
             continue;
 
-        if (config.scheduledHour != time.hour ||
-            config.scheduledMinute != time.minute)
+        if (config->scheduledHour != time.hour ||
+            config->scheduledMinute != time.minute)
         {
             continue;
         }
 
-        if (!animations_[i].loaded)
+        if (!animation.loaded)
             continue;
 
         showAnimation(i);

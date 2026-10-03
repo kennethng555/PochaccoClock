@@ -1,6 +1,19 @@
 #include "AnimatedImage.hpp"
 
 #include <cstdio>
+#include <utility>
+
+AnimatedImage::AnimatedImage(
+    AnimatedImage&& other) noexcept
+    : frames(std::move(other.frames)),
+      currentFrame(other.currentFrame),
+      frameTimer(other.frameTimer),
+      frameDuration(other.frameDuration)
+{
+    other.frames.clear();
+    other.currentFrame = 0;
+    other.frameTimer = 0.0f;
+}
 
 AnimatedImage::~AnimatedImage()
 {
@@ -13,6 +26,34 @@ AnimatedImage::~AnimatedImage()
     }
 
     frames.clear();
+}
+
+AnimatedImage& AnimatedImage::operator=(
+    AnimatedImage&& other) noexcept
+{
+    if (this == &other)
+        return *this;
+
+    for (SDL_Texture* texture : frames)
+    {
+        if (texture != nullptr)
+        {
+            SDL_DestroyTexture(texture);
+        }
+    }
+
+    frames.clear();
+
+    frames = std::move(other.frames);
+    currentFrame = other.currentFrame;
+    frameTimer = other.frameTimer;
+    frameDuration = other.frameDuration;
+
+    other.frames.clear();
+    other.currentFrame = 0;
+    other.frameTimer = 0.0f;
+
+    return *this;
 }
 
 bool AnimatedImage::load(
@@ -164,17 +205,37 @@ void AnimatedImage::render(
     if (frames.empty())
         return;
 
+    if (currentFrame >= frames.size())
+    {
+        SDL_Log(
+            "AnimatedImage: invalid frame %zu/%zu",
+            currentFrame,
+            frames.size());
+
+        return;
+    }
+
     SDL_Texture* texture =
         frames[currentFrame];
 
     if (texture == nullptr)
-        return;
+    {
+        SDL_Log(
+            "AnimatedImage: texture is null");
 
-    SDL_RenderTexture(
-        renderer,
-        texture,
-        nullptr,
-        &bounds);
+        return;
+    }
+
+    if (!SDL_RenderTexture(
+            renderer,
+            texture,
+            nullptr,
+            &bounds))
+    {
+        SDL_Log(
+            "AnimatedImage: SDL_RenderTexture failed: %s",
+            SDL_GetError());
+    }
 }
 
 void AnimatedImage::reset()
